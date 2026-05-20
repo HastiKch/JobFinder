@@ -76,6 +76,7 @@ HTML_BLOCK_END_RE = re.compile(
 )
 HTML_LIST_ITEM_RE = re.compile(r"<\s*li[^>]*>", re.IGNORECASE)
 HTML_TAG_RE = re.compile(r"<[^>]+>")
+DATETIME_PARSE_ERRORS = (TypeError, ValueError)
 MAX_CELL_CHARS = 49_000
 
 
@@ -414,7 +415,7 @@ def parse_datetime_value(settings: ScraperSettings, value: Any) -> datetime | No
         return None
     try:
         timestamp = float(value)
-    except (TypeError, ValueError):
+    except DATETIME_PARSE_ERRORS:
         timestamp = None
 
     if timestamp is not None:

@@ -18,6 +18,7 @@ from urllib.parse import (
 
 from jobfinder.dedupe.models import NormalizedJob, Provenance, SalaryRange
 
+DATETIME_PARSE_ERRORS = (TypeError, ValueError)
 MISSING_VALUES = {"", "n/a", "na", "none", "null", "open job", "open apply"}
 KNOWN_SOURCE_LABELS = {
     "linkedin": "LinkedIn",
@@ -491,7 +492,7 @@ def parse_datetime_value(value: Any) -> datetime | None:
         return None
     try:
         timestamp = float(value)
-    except (TypeError, ValueError):
+    except DATETIME_PARSE_ERRORS:
         timestamp = None
 
     if timestamp is not None:

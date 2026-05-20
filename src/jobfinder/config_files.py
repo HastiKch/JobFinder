@@ -10,6 +10,7 @@ from typing import Any
 from jobfinder.paths import FILTERS_FILE, KEYWORDS_FILE
 
 LOGGER = logging.getLogger(__name__)
+CONFIG_INT_ERRORS = (TypeError, ValueError)
 
 
 class ConfigFileError(RuntimeError):
@@ -74,7 +75,7 @@ def config_int(config: dict[str, Any], section: str, name: str, default: int) ->
     value = config_section(config, section).get(name, default)
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except CONFIG_INT_ERRORS:
         LOGGER.warning(
             "Invalid integer for %s.%s=%r; using %s.",
             section,
