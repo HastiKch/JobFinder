@@ -74,7 +74,7 @@ def config_int(config: dict[str, Any], section: str, name: str, default: int) ->
     value = config_section(config, section).get(name, default)
     try:
         return int(value)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         LOGGER.warning(
             "Invalid integer for %s.%s=%r; using %s.",
             section,

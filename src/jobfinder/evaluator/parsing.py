@@ -28,9 +28,7 @@ CV_SECTION_RE = re.compile(
     r"(?is)\n?\s*(?:\d+\.\s*)?Customized\s+CV\s*\(LaTeX\)\s*:\s*"
 )
 LATEX_CODE_BLOCK_RE = re.compile(r"(?is)```(?:latex)?\s*(?P<cv>.*?)```")
-LATEX_SECTION_START_RE = re.compile(
-    r"(?m)^[ \t]*\\section\*?\{(?P<title>[^}]+)\}"
-)
+LATEX_SECTION_START_RE = re.compile(r"(?m)^[ \t]*\\section\*?\{(?P<title>[^}]+)\}")
 
 PROTECTED_CV_SECTION_TITLES = ("Ausbildung",)
 EDUCATION_SECTION_ALIASES = (

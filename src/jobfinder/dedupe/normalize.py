@@ -491,7 +491,7 @@ def parse_datetime_value(value: Any) -> datetime | None:
         return None
     try:
         timestamp = float(value)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         timestamp = None
 
     if timestamp is not None:

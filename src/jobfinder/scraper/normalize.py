@@ -414,7 +414,7 @@ def parse_datetime_value(settings: ScraperSettings, value: Any) -> datetime | No
         return None
     try:
         timestamp = float(value)
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         timestamp = None
 
     if timestamp is not None:

@@ -196,8 +196,7 @@ class OpenAIJobEvaluator:
                 evaluated_at=evaluation.evaluated_at,
                 model=self.model,
                 error=(
-                    "Suitable response omitted a usable tailored LaTeX CV "
-                    "after retry."
+                    "Suitable response omitted a usable tailored LaTeX CV after retry."
                 ),
             )
 
