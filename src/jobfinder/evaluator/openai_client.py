@@ -18,7 +18,11 @@ from jobfinder.evaluator.models import (
 )
 from jobfinder.evaluator.parsing import (
     build_full_prompt,
+    build_missing_cv_retry_prompt,
+    enforce_protected_cv_sections,
+    extract_latex_cv_from_response,
     get_response_text,
+    looks_like_latex_cv,
     parse_model_response,
 )
 
@@ -45,7 +49,8 @@ Leadership/management mismatch; Role type mismatch; Location/relocation
 mismatch; Work authorization/clearance mismatch; Physical/medical/safety
 requirement mismatch; Other mandatory requirement mismatch. After those three
 lines, include any additional reason text and, if required by the MASTER PROMPT,
-the tailored LaTeX CV.
+the tailored LaTeX CV. If Verdict is Suitable, the tailored LaTeX CV is required
+and must not be blank, N/A, omitted, or replaced with a placeholder.
 """.strip()
 
 
@@ -156,11 +161,52 @@ class OpenAIJobEvaluator:
         """Evaluate a single job record and parse the model response."""
         prompt = build_full_prompt(master_prompt, record.advertisement, latex_cv)
         response_text = self.call_openai(prompt, record)
-        return parse_model_response(
+        evaluation = parse_model_response(
             response_text,
             row_number=record.row_number,
             model=self.model,
         )
+        if evaluation.verdict == "Suitable" and not looks_like_latex_cv(
+            evaluation.tailored_cv
+        ):
+            LOGGER.warning(
+                "Row %s (%s) was suitable but omitted a usable LaTeX CV. "
+                "Requesting a repair response.",
+                record.row_number,
+                record.display_name,
+            )
+            retry_prompt = build_missing_cv_retry_prompt(
+                master_prompt,
+                record.advertisement,
+                latex_cv,
+                response_text,
+            )
+            retry_response_text = self.call_openai(retry_prompt, record)
+            evaluation.tailored_cv = extract_latex_cv_from_response(retry_response_text)
+
+        if evaluation.verdict == "Suitable" and not looks_like_latex_cv(
+            evaluation.tailored_cv
+        ):
+            return JobEvaluation(
+                row_number=record.row_number,
+                verdict="Error",
+                fit_score=None,
+                reason=evaluation.reason,
+                raw_verdict=evaluation.raw_verdict,
+                evaluated_at=evaluation.evaluated_at,
+                model=self.model,
+                error=(
+                    "Suitable response omitted a usable tailored LaTeX CV "
+                    "after retry."
+                ),
+            )
+
+        if looks_like_latex_cv(evaluation.tailored_cv):
+            evaluation.tailored_cv = enforce_protected_cv_sections(
+                evaluation.tailored_cv,
+                latex_cv,
+            )
+        return evaluation
 
     def call_openai(self, prompt: str, record: JobRecord) -> str:
         """Call OpenAI with retries and return non-empty response text."""

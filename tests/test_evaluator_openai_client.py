@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from jobfinder.evaluator.models import JobEvaluation, JobRecord
-from jobfinder.evaluator.openai_client import RequestPacer, evaluate_records
+from jobfinder.evaluator.openai_client import (
+    OpenAIJobEvaluator,
+    RequestPacer,
+    evaluate_records,
+)
 
 
 class FakeEvaluator:
@@ -90,3 +94,136 @@ def test_evaluate_records_paces_only_large_queues(monkeypatch):
     )
 
     assert waits == [0.25, 0.25, 0.25]
+
+
+def test_openai_evaluator_restores_master_education_section(monkeypatch):
+    """The OpenAI evaluator should not trust a model-shortened education section."""
+    evaluator = OpenAIJobEvaluator.__new__(OpenAIJobEvaluator)
+    evaluator.model = "test-model"
+
+    def fake_call_openai(prompt: str, record: JobRecord) -> str:
+        return r"""Verdict: Suitable
+Fit Score: 91%
+Unsuitable Reasons:
+
+Customized CV (LaTeX):
+```latex
+\documentclass{article}
+\begin{document}
+\section*{Profil}
+Tailored profile
+
+\section*{Ausbildung}
+\textbf{Politecnico di Milano}
+
+\section*{Berufserfahrung}
+Tailored experience
+\end{document}
+```
+"""
+
+    monkeypatch.setattr(evaluator, "call_openai", fake_call_openai)
+    master_cv = r"""\documentclass{article}
+\begin{document}
+\section*{Profil}
+Master profile
+
+\section*{Ausbildung}
+\textbf{Politecnico di Milano}
+\begin{itemize}
+    \item \textbf{Universit\"at Bonn}
+    \item \textbf{Karlsruher Institut f\"ur Technologie (KIT)}
+\end{itemize}
+\textbf{Universit\"at Teheran}
+
+\section*{Berufserfahrung}
+Master experience
+\end{document}
+"""
+
+    result = evaluator.evaluate(
+        JobRecord(
+            row_number=2,
+            display_name="GIS Analyst",
+            advertisement="Job Title: GIS Analyst",
+        ),
+        "Prompt",
+        master_cv,
+    )
+
+    assert result.verdict == "Suitable"
+    assert r"\item \textbf{Universit\"at Bonn}" in result.tailored_cv
+    assert (
+        r"\item \textbf{Karlsruher Institut f\"ur Technologie (KIT)}"
+        in result.tailored_cv
+    )
+    assert r"\textbf{Universit\"at Teheran}" in result.tailored_cv
+
+
+def test_openai_evaluator_retries_suitable_response_missing_cv(monkeypatch):
+    """Suitable responses that omit LaTeX should get a targeted repair call."""
+    evaluator = OpenAIJobEvaluator.__new__(OpenAIJobEvaluator)
+    evaluator.model = "test-model"
+    responses = [
+        """Verdict: Suitable
+Fit Score: 86%
+Unsuitable Reasons:
+
+Why it fits:
+- Solid GIS match.
+""",
+        r"""Verdict: Suitable
+Fit Score: 86%
+Unsuitable Reasons:
+
+Customized CV (LaTeX):
+```latex
+\documentclass{article}
+\begin{document}
+\section*{Profil}
+Tailored profile
+
+\section*{Ausbildung}
+\textbf{Politecnico di Milano}
+
+\section*{Berufserfahrung}
+Tailored experience
+\end{document}
+```
+""",
+    ]
+    prompts: list[str] = []
+
+    def fake_call_openai(prompt: str, record: JobRecord) -> str:
+        prompts.append(prompt)
+        return responses.pop(0)
+
+    monkeypatch.setattr(evaluator, "call_openai", fake_call_openai)
+    master_cv = r"""\documentclass{article}
+\begin{document}
+\section*{Ausbildung}
+\textbf{Politecnico di Milano}
+\begin{itemize}
+    \item \textbf{Universit\"at Bonn}
+\end{itemize}
+
+\section*{Berufserfahrung}
+Master experience
+\end{document}
+"""
+
+    result = evaluator.evaluate(
+        JobRecord(
+            row_number=2,
+            display_name="GIS Analyst",
+            advertisement="Job Title: GIS Analyst",
+        ),
+        "Prompt",
+        master_cv,
+    )
+
+    assert result.verdict == "Suitable"
+    assert len(prompts) == 2
+    assert "Missing Tailored CV Repair Task" in prompts[1]
+    assert r"\section*{Profil}" in result.tailored_cv
+    assert r"\item \textbf{Universit\"at Bonn}" in result.tailored_cv
