@@ -163,6 +163,7 @@ def extract_job_records(
     header_map = build_header_map(headers)
     verdict_idx = header_map.get(normalize_header("AI Verdict"))
     tailored_cv_idx = header_map.get(normalize_header("AI Tailored CV"))
+    cv_pdf_idx = header_map.get(normalize_header("AI CV PDF"))
     records: list[JobRecord] = []
     skipped_existing = 0
 
@@ -180,10 +181,16 @@ def extract_job_records(
             if tailored_cv_idx is not None
             else ""
         )
+        existing_cv_pdf = (
+            clean_cell_text(get_row_value(row, cv_pdf_idx))
+            if cv_pdf_idx is not None
+            else ""
+        )
         normalized_verdict = existing_verdict.casefold()
         suitable_missing_cv = (
             normalized_verdict == "suitable"
             and not looks_like_latex_cv(existing_tailored_cv)
+            and not existing_cv_pdf
         )
         if (
             not reevaluate_existing

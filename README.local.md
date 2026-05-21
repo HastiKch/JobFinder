@@ -166,6 +166,7 @@ Common settings:
 | `JOB_EVAL_CV_PHOTO_FILE` | `cv/photo.jpg` | Optional photo copied into each temporary LaTeX build directory. |
 | `JOB_EVAL_CV_PDF_TIMEOUT` | `120` | Max seconds per LaTeX compilation. |
 | `JOB_EVAL_CV_DRIVE_PARENT_FOLDER` | `JobFinder` | Google Drive parent folder for timestamped run folders. |
+| `JOB_EVAL_CV_PDF_APPLICANT_NAME` | `Amir Donyadide` | Applicant name used in compact PDF filenames like `12_CV_Amir_Donyadide.pdf`. |
 | `JOB_EVAL_LARGE_QUEUE_THRESHOLD` | `200` | Enable request pacing when more than this many rows are queued for OpenAI. |
 | `JOB_EVAL_LARGE_QUEUE_SLEEP_MS` | `2000` | Milliseconds to wait between OpenAI request starts for large queues. |
 | `JOB_EVAL_SAVE_BATCH_SIZE` | `1` | Number of completed evaluations to save per write. `1` preserves row-by-row crash recovery. |
@@ -305,7 +306,7 @@ python job_fit_evaluator.py --source excel --sheet latest
 - `python run_job_pipeline.py` evaluates the latest new Google Sheet tab in place.
 - Completed evaluations are saved as rows finish, so a later failure keeps already completed rows.
 - By default, final cleanup keeps only one-label `Not Suitable` rows. Set `JOB_EVAL_UNSUITABLE_ROW_POLICY=keep_all` to preserve all evaluated rows.
-- After evaluation, the final AI columns are `AI Verdict`, `AI Fit Score`, `AI Unsuitable Reasons`, `AI Tailored CV`, and `AI CV PDF`.
+- After evaluation with PDF output enabled, the final AI columns are `AI Verdict`, `AI Fit Score`, `AI Unsuitable Reasons`, and `AI CV PDF`; the temporary `AI Tailored CV` column is removed during final cleanup.
 - `AI CV PDF` contains a Google Drive PDF link on success, or a LaTeX/Drive error for that row.
 
 ## 8. Troubleshooting Local Runs

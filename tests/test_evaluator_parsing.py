@@ -85,6 +85,26 @@ def test_extract_job_records_requeues_suitable_rows_missing_cv():
     assert skipped == 0
 
 
+def test_extract_job_records_skips_suitable_rows_with_pdf_link_without_cv():
+    """Rows with an existing generated PDF should not need stored LaTeX."""
+    headers, _ = ensure_output_columns(["Job Title", "Company"])
+    verdict_idx = headers.index("AI Verdict")
+    tailored_cv_idx = headers.index("AI Tailored CV")
+    cv_pdf_idx = headers.index("AI CV PDF")
+    row = ["GIS Analyst", "Acme"] + [""] * (len(headers) - 2)
+    row[verdict_idx] = "Suitable"
+    row[tailored_cv_idx] = ""
+    row[cv_pdf_idx] = "https://drive.google.com/file/d/pdf-id/view"
+
+    records, skipped = extract_job_records(
+        headers,
+        [row],
+    )
+
+    assert records == []
+    assert skipped == 1
+
+
 def test_parse_model_response_extracts_verdict_score_reason_and_cv():
     """Machine-readable model responses should parse into evaluator fields."""
     response = """Verdict: Suitable

@@ -20,6 +20,7 @@ from jobfinder.evaluator.parsing import (
     read_text_asset,
 )
 from jobfinder.evaluator.pdf_output import (
+    DEFAULT_CV_PDF_APPLICANT_NAME,
     DEFAULT_DRIVE_PARENT_FOLDER_NAME,
     generate_cv_pdf_outputs,
 )
@@ -93,6 +94,7 @@ class EvaluationOptions:
     cv_photo_file: Path
     cv_pdf_compile_timeout: int
     cv_drive_parent_folder: str
+    cv_pdf_applicant_name: str
     large_queue_threshold: int
     large_queue_sleep_ms: int
     save_batch_size: int
@@ -150,6 +152,10 @@ def options_from_env(
         cv_drive_parent_folder=env.get(
             "JOB_EVAL_CV_DRIVE_PARENT_FOLDER",
             DEFAULT_DRIVE_PARENT_FOLDER_NAME,
+        ),
+        cv_pdf_applicant_name=env.get(
+            "JOB_EVAL_CV_PDF_APPLICANT_NAME",
+            DEFAULT_CV_PDF_APPLICANT_NAME,
         ),
         large_queue_threshold=env.get_int("JOB_EVAL_LARGE_QUEUE_THRESHOLD", 200),
         large_queue_sleep_ms=env.get_int("JOB_EVAL_LARGE_QUEUE_SLEEP_MS", 2000),
@@ -283,6 +289,7 @@ def write_outputs(
     *,
     cleanup_columns: bool = True,
     remove_rejected_rows: bool = True,
+    remove_tailored_cv: bool = False,
 ) -> None:
     """Write evaluator headers and result values back to the selected source."""
     if source == "excel":
@@ -295,6 +302,7 @@ def write_outputs(
             evaluations,
             cleanup_columns=cleanup_columns,
             remove_rejected_rows=remove_rejected_rows,
+            remove_tailored_cv=remove_tailored_cv,
         )
     else:
         write_google_output(
@@ -306,6 +314,7 @@ def write_outputs(
             evaluations,
             cleanup_columns=cleanup_columns,
             remove_rejected_rows=remove_rejected_rows,
+            remove_tailored_cv=remove_tailored_cv,
         )
 
 
@@ -353,6 +362,7 @@ def run_evaluation(options: EvaluationOptions) -> EvaluationSummary:
             header_map,
             {},
             remove_rejected_rows=remove_rejected_rows,
+            remove_tailored_cv=options.cv_pdf_output,
         )
         return EvaluationSummary(
             source=source,
@@ -438,6 +448,7 @@ def run_evaluation(options: EvaluationOptions) -> EvaluationSummary:
             evaluations,
             photo_path=photo_path,
             parent_folder_name=options.cv_drive_parent_folder,
+            applicant_name=options.cv_pdf_applicant_name,
             timeout_seconds=options.cv_pdf_compile_timeout,
         )
         cv_pdf_count = pdf_result.success_count
@@ -492,6 +503,7 @@ def run_evaluation(options: EvaluationOptions) -> EvaluationSummary:
         {},
         cleanup_columns=True,
         remove_rejected_rows=remove_rejected_rows,
+        remove_tailored_cv=options.cv_pdf_output,
     )
     if source == "excel":
         LOGGER.info(

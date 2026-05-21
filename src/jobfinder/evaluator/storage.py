@@ -74,12 +74,17 @@ def read_excel_input(
     return workbook, worksheet, sheet_name, headers, rows
 
 
-def columns_to_remove_after_evaluation(headers: list[str]) -> list[int]:
+def columns_to_remove_after_evaluation(
+    headers: list[str],
+    *,
+    remove_tailored_cv: bool = False,
+) -> list[int]:
     """Return zero-based column indexes to delete after evaluator output is saved."""
-    removable = {
-        normalize_header(column)
-        for column in [*REMOVED_AI_OUTPUT_COLUMNS, *DETAIL_COLUMNS]
-    }
+    removable_columns = [*REMOVED_AI_OUTPUT_COLUMNS, *DETAIL_COLUMNS]
+    if remove_tailored_cv:
+        removable_columns.append("AI Tailored CV")
+
+    removable = {normalize_header(column) for column in removable_columns}
     return [
         idx
         for idx, header in enumerate(headers)
@@ -87,9 +92,20 @@ def columns_to_remove_after_evaluation(headers: list[str]) -> list[int]:
     ]
 
 
-def remove_excel_columns_after_evaluation(worksheet: Any, headers: list[str]) -> None:
+def remove_excel_columns_after_evaluation(
+    worksheet: Any,
+    headers: list[str],
+    *,
+    remove_tailored_cv: bool = False,
+) -> None:
     """Delete legacy AI metadata and job detail columns from an Excel worksheet."""
-    for column_idx in sorted(columns_to_remove_after_evaluation(headers), reverse=True):
+    for column_idx in sorted(
+        columns_to_remove_after_evaluation(
+            headers,
+            remove_tailored_cv=remove_tailored_cv,
+        ),
+        reverse=True,
+    ):
         worksheet.delete_cols(column_idx + 1)
 
 
@@ -179,6 +195,7 @@ def write_excel_output(
     *,
     cleanup_columns: bool = True,
     remove_rejected_rows: bool = True,
+    remove_tailored_cv: bool = False,
 ) -> None:
     """Write evaluator columns and results back to an Excel worksheet."""
     for col_idx, header in enumerate(headers, start=1):
@@ -195,7 +212,11 @@ def write_excel_output(
     if cleanup_columns:
         if remove_rejected_rows:
             remove_excel_rows_after_evaluation(worksheet, headers)
-        remove_excel_columns_after_evaluation(worksheet, headers)
+        remove_excel_columns_after_evaluation(
+            worksheet,
+            headers,
+            remove_tailored_cv=remove_tailored_cv,
+        )
     workbook.save(path)
 
 
@@ -259,6 +280,7 @@ def write_google_output(
     *,
     cleanup_columns: bool = True,
     remove_rejected_rows: bool = True,
+    remove_tailored_cv: bool = False,
 ) -> None:
     """Write evaluator columns and results back to a Google Sheet tab."""
     data = []
@@ -307,6 +329,7 @@ def write_google_output(
             spreadsheet_id,
             sheet_name,
             headers,
+            remove_tailored_cv=remove_tailored_cv,
         )
 
 
@@ -368,9 +391,14 @@ def remove_google_columns_after_evaluation(
     spreadsheet_id: str,
     sheet_name: str,
     headers: list[str],
+    *,
+    remove_tailored_cv: bool = False,
 ) -> None:
     """Delete legacy AI metadata and job detail columns from a Google Sheet tab."""
-    column_indexes = columns_to_remove_after_evaluation(headers)
+    column_indexes = columns_to_remove_after_evaluation(
+        headers,
+        remove_tailored_cv=remove_tailored_cv,
+    )
     if not column_indexes:
         return
 

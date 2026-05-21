@@ -182,11 +182,12 @@ it chooses Google Sheets when a spreadsheet ID is configured; otherwise it uses
 Excel.
 
 1. Read the selected sheet, with `latest` resolving to the newest worksheet/tab.
-2. Ensure the final AI columns exist:
+2. Ensure the evaluator AI columns exist:
    - `AI Verdict`
    - `AI Fit Score`
    - `AI Unsuitable Reasons`
    - `AI Tailored CV`
+   - `AI CV PDF`
 3. Skip rows with an existing non-`Error` `AI Verdict`.
 4. Build each job advertisement from useful row columns, excluding URLs,
    applicant/status fields, and existing AI output.
@@ -201,8 +202,9 @@ Excel.
 9. Compile generated CV LaTeX into PDFs, upload them to a timestamped Google
    Drive run folder under `JobFinder`, and write the PDF link or compilation
    error to `AI CV PDF`.
-10. Finalize by removing legacy AI metadata columns and detail columns such as
-   `Job Description`.
+10. Finalize by removing legacy AI metadata columns, detail columns such as
+   `Job Description`, and the temporary `AI Tailored CV` column when PDF output
+   is enabled.
 11. Apply `JOB_EVAL_UNSUITABLE_ROW_POLICY`.
 
 Default evaluator policy:
@@ -562,6 +564,7 @@ Stepstone date filtering maps `rSECONDS` windows to supported day buckets:
 | `JOB_EVAL_CV_PHOTO_FILE` | `cv/photo.jpg` | Optional local photo copied into each isolated LaTeX build directory. |
 | `JOB_EVAL_CV_PDF_TIMEOUT` | `120` | Max seconds allowed for one LaTeX PDF compilation. |
 | `JOB_EVAL_CV_DRIVE_PARENT_FOLDER` | `JobFinder` | Google Drive parent folder for timestamped evaluator PDF folders. |
+| `JOB_EVAL_CV_PDF_APPLICANT_NAME` | `Amir Donyadide` | Applicant name used in compact PDF filenames like `12_CV_Amir_Donyadide.pdf`. |
 | `JOB_EVAL_LARGE_QUEUE_THRESHOLD` | `200` | Enables request pacing when queued rows exceed this count. |
 | `JOB_EVAL_LARGE_QUEUE_SLEEP_MS` | `2000` | Delay between request starts when pacing is enabled. |
 | `JOB_EVAL_SAVE_BATCH_SIZE` | `1` | Number of completed evaluations saved per write. |
@@ -627,7 +630,7 @@ Stable scraper columns:
 | `AI Verdict` | Filled by evaluator. |
 | `AI Fit Score` | Filled by evaluator. |
 | `AI Unsuitable Reasons` | Filled for rejected rows. |
-| `AI Tailored CV` | Optional tailored LaTeX CV content. |
+| `AI Tailored CV` | Temporary tailored LaTeX CV content; removed during final cleanup when PDF output is enabled. |
 | `AI CV PDF` | Google Drive PDF link, or a compile/upload error for that row. |
 
 The hidden `_jobfinder_seen_jobs` tab is maintained by the scraper. Do not edit

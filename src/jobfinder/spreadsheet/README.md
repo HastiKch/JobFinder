@@ -25,8 +25,10 @@ src/jobfinder/spreadsheet/schema.py
 - `AI Verdict`
 - `AI Fit Score`
 - `AI Unsuitable Reasons`
-- `AI Tailored CV`
 - `AI CV PDF`
+
+`AI Tailored CV` is a temporary evaluator column and is removed during final
+cleanup when PDF output is enabled.
 
 ## Current Scraper Columns
 

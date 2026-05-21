@@ -12,6 +12,7 @@ from jobfinder.evaluator.latex import LatexCompilationResult, compile_latex_to_p
 from jobfinder.evaluator.models import JobEvaluation, JobRecord
 from jobfinder.evaluator.pdf_output import (
     assign_cv_ids,
+    cv_pdf_filename,
     drive_run_folder_name,
     generate_cv_pdf_outputs,
     sanitize_filename,
@@ -71,8 +72,13 @@ def test_sanitize_filename_removes_path_and_unsafe_characters():
     assert value == "Senior GIS Remote Berlin"
 
 
-def test_assign_cv_ids_are_contiguous_for_generated_cvs():
-    """Only rows with generated LaTeX CVs receive run-local numeric IDs."""
+def test_cv_pdf_filename_uses_only_row_id_cv_and_applicant_name():
+    """Generated PDF filenames should avoid company and role names."""
+    assert cv_pdf_filename(12, "Amir Donyadide") == "12_CV_Amir_Donyadide.pdf"
+
+
+def test_assign_cv_ids_are_row_numbers_for_generated_cvs():
+    """Only rows with generated LaTeX CVs receive stable row-number IDs."""
     records = [
         JobRecord(2, "GIS Analyst / Acme", "Job Title: GIS Analyst"),
         JobRecord(3, "Senior Manager / Acme", "Job Title: Senior Manager"),
@@ -86,11 +92,10 @@ def test_assign_cv_ids_are_contiguous_for_generated_cvs():
 
     candidates = assign_cv_ids(records, evaluations)
 
-    assert [candidate.cv_id for candidate in candidates] == [1, 2]
+    assert [candidate.cv_id for candidate in candidates] == [2, 4]
     assert [candidate.row_number for candidate in candidates] == [2, 4]
-    assert candidates[0].filename.startswith("1_")
-    assert candidates[1].filename.startswith("2_")
-    assert "/" not in candidates[0].filename
+    assert candidates[0].filename == "2_CV_Amir_Donyadide.pdf"
+    assert candidates[1].filename == "4_CV_Amir_Donyadide.pdf"
 
 
 def test_compile_latex_to_pdf_captures_subprocess_failure(tmp_path):
@@ -175,7 +180,7 @@ def test_generate_cv_pdf_outputs_creates_drive_folder_and_links(tmp_path):
         upload_pdf=fake_upload,
     )
 
-    assert result.outputs == {2: "https://drive.example/1_GIS Analyst Acme.pdf"}
+    assert result.outputs == {2: "https://drive.example/2_CV_Amir_Donyadide.pdf"}
     assert result.success_count == 1
     assert result.error_count == 0
     assert [call["body"]["name"] for call in service.creates] == [
@@ -183,4 +188,4 @@ def test_generate_cv_pdf_outputs_creates_drive_folder_and_links(tmp_path):
         "2026-05-20_09-08-07",
     ]
     assert uploads[0][1] == "folder-2"
-    assert uploads[0][2] == "1_GIS Analyst Acme.pdf"
+    assert uploads[0][2] == "2_CV_Amir_Donyadide.pdf"

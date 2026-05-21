@@ -23,6 +23,7 @@ from jobfinder.google_drive import (
 )
 
 DEFAULT_DRIVE_PARENT_FOLDER_NAME = "JobFinder"
+DEFAULT_CV_PDF_APPLICANT_NAME = "Amir Donyadide"
 ERROR_CELL_LIMIT = 4000
 INVALID_FILENAME_CHARS_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 
@@ -71,20 +72,25 @@ def sanitize_filename(value: str, *, max_length: int = 120) -> str:
     return sanitized
 
 
-def cv_pdf_filename(cv_id: int, display_name: str) -> str:
-    """Build a sanitized PDF filename that starts with the numeric CV ID."""
-    prefix = f"{cv_id}_"
-    stem = sanitize_filename(display_name, max_length=160 - len(prefix) - 4)
+def cv_pdf_filename(
+    cv_id: int,
+    applicant_name: str = DEFAULT_CV_PDF_APPLICANT_NAME,
+) -> str:
+    """Build a compact PDF filename from the row ID and applicant name."""
+    prefix = f"{cv_id}_CV_"
+    stem = sanitize_filename(applicant_name, max_length=160 - len(prefix) - 4)
+    stem = stem.replace(" ", "_")
     return f"{prefix}{stem}.pdf"
 
 
 def assign_cv_ids(
     records: Sequence[JobRecord],
     evaluations: Mapping[int, JobEvaluation],
+    *,
+    applicant_name: str = DEFAULT_CV_PDF_APPLICANT_NAME,
 ) -> list[CvPdfCandidate]:
-    """Assign contiguous IDs to evaluations that contain generated LaTeX CVs."""
+    """Assign stable row-number IDs to evaluations with generated LaTeX CVs."""
     candidates: list[CvPdfCandidate] = []
-    next_id = 1
     for record in records:
         evaluation = evaluations.get(record.row_number)
         if (
@@ -93,16 +99,16 @@ def assign_cv_ids(
             or not looks_like_latex_cv(evaluation.tailored_cv)
         ):
             continue
+        cv_id = record.row_number
         candidates.append(
             CvPdfCandidate(
-                cv_id=next_id,
+                cv_id=cv_id,
                 row_number=record.row_number,
                 display_name=record.display_name,
                 latex=evaluation.tailored_cv,
-                filename=cv_pdf_filename(next_id, record.display_name),
+                filename=cv_pdf_filename(cv_id, applicant_name),
             )
         )
-        next_id += 1
     return candidates
 
 
@@ -143,13 +149,18 @@ def generate_cv_pdf_outputs(
     photo_path: Path | None = None,
     drive_service: Any | None = None,
     parent_folder_name: str = DEFAULT_DRIVE_PARENT_FOLDER_NAME,
+    applicant_name: str = DEFAULT_CV_PDF_APPLICANT_NAME,
     now: datetime | None = None,
     timeout_seconds: int = 120,
     compile_latex: CompileLatexFunc = compile_latex_to_pdf,
     upload_pdf: UploadPdfFunc = upload_pdf_to_drive,
 ) -> CvPdfRunResult:
     """Compile generated CVs, upload PDFs to Drive, and return sheet values."""
-    candidates = assign_cv_ids(records, evaluations)
+    candidates = assign_cv_ids(
+        records,
+        evaluations,
+        applicant_name=applicant_name,
+    )
     if not candidates:
         return CvPdfRunResult(outputs={}, success_count=0, error_count=0)
 

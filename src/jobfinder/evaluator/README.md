@@ -98,8 +98,10 @@ through `models.py`:
 - `AI Verdict`
 - `AI Fit Score`
 - `AI Unsuitable Reasons`
-- `AI Tailored CV`
 - `AI CV PDF`
+
+`AI Tailored CV` is used as temporary storage while PDF generation runs. Final
+cleanup removes it when PDF output is enabled.
 
 Legacy AI metadata columns are recognized and removed during final cleanup:
 
@@ -125,8 +127,9 @@ Final cleanup runs after all queued rows finish.
 ## PDF Output
 
 When `JOB_EVAL_CV_PDF_OUTPUT=true`, suitable rows with generated LaTeX CVs are
-assigned run-local IDs from `1` to `n`. PDF filenames start with that ID and use
-a sanitized row display name, for example `1_GIS Analyst Acme.pdf`.
+named with the spreadsheet row number, `CV`, and
+`JOB_EVAL_CV_PDF_APPLICANT_NAME`, for example
+`12_CV_Amir_Donyadide.pdf`.
 
 Each CV is compiled in its own temporary directory with `latexmk -xelatex`.
 `JOB_EVAL_CV_PHOTO_FILE` defaults to `cv/photo.jpg`; when present, it is copied

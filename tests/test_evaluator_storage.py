@@ -269,6 +269,47 @@ def test_final_excel_cleanup_can_keep_all_not_suitable_rows(tmp_path):
     assert worksheet.cell(row=2, column=2).value == "Not Suitable"
 
 
+def test_final_excel_cleanup_can_remove_tailored_cv_column(tmp_path):
+    """Final PDF-enabled cleanup should remove raw LaTeX CV content."""
+    workbook = openpyxl.Workbook()
+    worksheet = workbook.active
+    output_file = tmp_path / "jobs.xlsx"
+    headers, header_map = ensure_output_columns(["Job Title", "Job Description"])
+
+    worksheet.cell(row=2, column=1).value = "GIS Analyst"
+    worksheet.cell(row=2, column=2).value = "Analyze spatial data"
+
+    write_excel_output(
+        workbook,
+        worksheet,
+        output_file,
+        headers,
+        header_map,
+        {
+            2: JobEvaluation(
+                row_number=2,
+                verdict="Suitable",
+                fit_score=90,
+                reason="Strong match.",
+                tailored_cv=r"\documentclass{article}\begin{document}\end{document}",
+                cv_pdf="https://drive.google.com/file/d/pdf-id/view",
+                model="test-model",
+            )
+        },
+        cleanup_columns=True,
+        remove_tailored_cv=True,
+    )
+
+    finalized = openpyxl.load_workbook(output_file)
+    finalized_headers = [
+        finalized.active.cell(row=1, column=idx).value
+        for idx in range(1, finalized.active.max_column + 1)
+    ]
+
+    assert "AI Tailored CV" not in finalized_headers
+    assert "AI CV PDF" in finalized_headers
+
+
 def test_final_google_cleanup_removes_multi_label_not_suitable_rows():
     """Google Sheets cleanup should delete rejected rows before deleting columns."""
     headers, header_map = ensure_output_columns(["Job Title", "Job Description"])
@@ -386,3 +427,28 @@ def test_final_google_cleanup_can_keep_all_not_suitable_rows():
     column_update = service.dimension_updates[0][1]
     column_range = column_update["requests"][0]["deleteDimension"]["range"]
     assert column_range["dimension"] == "COLUMNS"
+
+
+def test_final_google_cleanup_can_remove_tailored_cv_column():
+    """Final PDF-enabled cleanup should delete the raw LaTeX column in Sheets."""
+    headers, header_map = ensure_output_columns(["Job Title", "Job Description"])
+    service = FakeGoogleService([headers])
+
+    write_google_output(
+        service,
+        "spreadsheet-id",
+        "Run",
+        headers,
+        header_map,
+        {},
+        cleanup_columns=True,
+        remove_tailored_cv=True,
+    )
+
+    column_update = service.dimension_updates[0][1]
+    deleted_indexes = [
+        request["deleteDimension"]["range"]["startIndex"]
+        for request in column_update["requests"]
+    ]
+    assert headers.index("AI Tailored CV") in deleted_indexes
+    assert headers.index("AI CV PDF") not in deleted_indexes
