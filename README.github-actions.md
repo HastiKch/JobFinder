@@ -285,9 +285,12 @@ GitHub may delay scheduled workflows slightly. That is normal.
 To change the schedule, edit the `cron` value in `.github/workflows/jobs.yml`,
 commit the change, and push it to GitHub.
 
-Scheduled runs keep the existing defaults: `since_previous_run`, max applicants
-`100`, and `single_label_only`. The final tab keeps `Not Suitable` rows only
-when they have exactly one unsuitable-reason label.
+Scheduled runs keep the existing defaults: all sources, `since_previous_run`,
+max applicants `50`, `scrape_and_evaluate`, and `single_label_only`. The final
+tab keeps `Not Suitable` rows only when they have exactly one unsuitable-reason
+label. Source geography is Germany-only: LinkedIn uses the Germany location and
+geo ID from `configs/filters.json`, Indeed uses `DE` / `Germany`, and Stepstone
+uses `deutschland`.
 
 ## 8. Runtime Settings In GitHub Actions
 
@@ -295,10 +298,10 @@ The current workflow sets these runtime values in `.github/workflows/jobs.yml`:
 
 ```yaml
 JOBSCRAPER_OUTPUT_MODE: "google_sheets"
-JOBSCRAPER_SOURCES: ${{ github.event.inputs.sources || 'linkedin' }}
+JOBSCRAPER_SOURCES: ${{ github.event.inputs.sources || 'all' }}
 JOBFINDER_PIPELINE_MODE: ${{ github.event.inputs.run_mode || 'scrape_and_evaluate' }}
 JOBSCRAPER_POSTED_TIME_WINDOW: ${{ github.event.inputs.posted_time_window || 'since_previous_run' }}
-JOBSCRAPER_MAX_APPLICANTS: ${{ github.event.inputs.max_applicants == 'no_limit' && '0' || github.event.inputs.max_applicants || '100' }}
+JOBSCRAPER_MAX_APPLICANTS: ${{ github.event.inputs.max_applicants == 'no_limit' && '0' || github.event.inputs.max_applicants || '50' }}
 JOBSCRAPER_SEARCH_CONCURRENCY: "15"
 JOBSCRAPER_SEARCH_WINDOW_BUFFER_SECONDS: "3600"
 APIFY_RUN_MEMORY_MB: "512"
@@ -306,6 +309,8 @@ APIFY_RUN_TIMEOUT_SECONDS: "3600"
 APIFY_CLIENT_TIMEOUT_SECONDS: "120"
 APIFY_TRANSIENT_ERROR_RETRIES: "5"
 APIFY_RETRY_DELAY_SECONDS: "30"
+INDEED_COUNTRY: "DE"
+INDEED_LOCATION: "Germany"
 STEPSTONE_LOCATION: "deutschland"
 STEPSTONE_MAX_CONCURRENCY: "10"
 STEPSTONE_MAX_REQUEST_RETRIES: "3"

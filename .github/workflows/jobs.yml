@@ -6,7 +6,7 @@ on:
       sources:
         description: "Job sources to scrape"
         required: true
-        default: "linkedin"
+        default: "all"
         type: choice
         options:
           - linkedin
@@ -27,7 +27,7 @@ on:
       max_applicants:
         description: "Maximum applicants per job"
         required: true
-        default: "100"
+        default: "50"
         type: choice
         options:
           - "50"
@@ -80,10 +80,10 @@ jobs:
       MASTER_CV_TEX: ${{ secrets.MASTER_CV_TEX }}
       CV_PHOTO_BASE64: ${{ secrets.CV_PHOTO_BASE64 }}
       JOBSCRAPER_OUTPUT_MODE: "google_sheets"
-      JOBSCRAPER_SOURCES: ${{ github.event.inputs.sources || 'linkedin' }}
+      JOBSCRAPER_SOURCES: ${{ github.event.inputs.sources || 'all' }}
       JOBFINDER_PIPELINE_MODE: ${{ github.event.inputs.run_mode || 'scrape_and_evaluate' }}
       JOBSCRAPER_POSTED_TIME_WINDOW: ${{ github.event.inputs.posted_time_window || 'since_previous_run' }}
-      JOBSCRAPER_MAX_APPLICANTS: ${{ github.event.inputs.max_applicants == 'no_limit' && '0' || github.event.inputs.max_applicants || '100' }}
+      JOBSCRAPER_MAX_APPLICANTS: ${{ github.event.inputs.max_applicants == 'no_limit' && '0' || github.event.inputs.max_applicants || '50' }}
       JOBSCRAPER_SEARCH_CONCURRENCY: "15"
       JOBSCRAPER_SEARCH_WINDOW_BUFFER_SECONDS: "3600"
       APIFY_RUN_MEMORY_MB: "512"
@@ -96,6 +96,8 @@ jobs:
       JOBFINDER_PIPELINE_STEP_TIMEOUT_SECONDS: "21000"
       JOBSCRAPER_DELAY_BETWEEN_REQUESTS: "0"
       JOBSCRAPER_SCRAPE_COMPANY_DETAILS: "false"
+      INDEED_COUNTRY: "DE"
+      INDEED_LOCATION: "Germany"
       STEPSTONE_LOCATION: "deutschland"
       STEPSTONE_MAX_CONCURRENCY: "10"
       STEPSTONE_MAX_REQUEST_RETRIES: "3"
