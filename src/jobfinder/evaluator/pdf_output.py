@@ -26,6 +26,24 @@ DEFAULT_DRIVE_PARENT_FOLDER_NAME = "JobFinder"
 DEFAULT_CV_PDF_APPLICANT_NAME = "Amir Donyadide"
 ERROR_CELL_LIMIT = 4000
 INVALID_FILENAME_CHARS_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
+SAFE_FILENAME_TOKEN_RE = re.compile(r"[^A-Za-z0-9]+")
+COMPANY_LEGAL_SUFFIXES = {
+    "ag",
+    "co",
+    "company",
+    "corp",
+    "corporation",
+    "gmbh",
+    "group",
+    "inc",
+    "kg",
+    "limited",
+    "llc",
+    "ltd",
+    "mbh",
+    "se",
+    "ug",
+}
 
 
 @dataclass(frozen=True)
@@ -72,15 +90,64 @@ def sanitize_filename(value: str, *, max_length: int = 120) -> str:
     return sanitized
 
 
+def safe_filename_token(
+    value: str,
+    *,
+    max_words: int | None = None,
+    drop_words: set[str] | None = None,
+    fallback: str = "CV",
+) -> str:
+    """Return an upload-safe ASCII token using only letters, numbers, underscores."""
+    normalized = unicodedata.normalize("NFKD", str(value or ""))
+    ascii_text = "".join(char for char in normalized if not unicodedata.combining(char))
+    ascii_text = ascii_text.encode("ascii", "ignore").decode("ascii")
+    words = [
+        word
+        for word in SAFE_FILENAME_TOKEN_RE.split(ascii_text)
+        if word and word.casefold() not in (drop_words or set())
+    ]
+    if max_words is not None:
+        words = words[:max_words]
+    return "_".join(words) or fallback
+
+
+def display_name_parts(display_name: str) -> tuple[str, str]:
+    """Split a row display name into simple role and company labels."""
+    parts = [part.strip() for part in str(display_name or "").split(" / ", 1)]
+    role = parts[0] if parts and parts[0] else ""
+    company = parts[1] if len(parts) > 1 else ""
+    return role, company
+
+
 def cv_pdf_filename(
     cv_id: int,
+    display_name: str = "",
     applicant_name: str = DEFAULT_CV_PDF_APPLICANT_NAME,
 ) -> str:
-    """Build a compact PDF filename from the row ID and applicant name."""
-    prefix = f"{cv_id}_CV_"
-    stem = sanitize_filename(applicant_name, max_length=160 - len(prefix) - 4)
-    stem = stem.replace(" ", "_")
-    return f"{prefix}{stem}.pdf"
+    """Build a PDF filename from row ID, applicant, role, and company."""
+    role, company = display_name_parts(display_name)
+    parts = [
+        str(cv_id),
+        "CV",
+        safe_filename_token(applicant_name, max_words=4),
+    ]
+    if role:
+        role_token = safe_filename_token(role, max_words=5, fallback="")
+        if role_token:
+            parts.append(role_token)
+    if company:
+        company_token = safe_filename_token(
+            company,
+            max_words=4,
+            drop_words=COMPANY_LEGAL_SUFFIXES,
+            fallback="",
+        )
+        if company_token:
+            parts.append(company_token)
+    stem = "_".join(part for part in parts if part)
+    if len(stem) > 156:
+        stem = stem[:156].rstrip("_") or f"{cv_id}_CV"
+    return f"{stem}.pdf"
 
 
 def assign_cv_ids(
@@ -106,7 +173,7 @@ def assign_cv_ids(
                 row_number=record.row_number,
                 display_name=record.display_name,
                 latex=evaluation.tailored_cv,
-                filename=cv_pdf_filename(cv_id, applicant_name),
+                filename=cv_pdf_filename(cv_id, record.display_name, applicant_name),
             )
         )
     return candidates

@@ -127,9 +127,11 @@ Final cleanup runs after all queued rows finish.
 ## PDF Output
 
 When `JOB_EVAL_CV_PDF_OUTPUT=true`, suitable rows with generated LaTeX CVs are
-named with the spreadsheet row number, `CV`, and
-`JOB_EVAL_CV_PDF_APPLICANT_NAME`, for example
-`12_CV_Amir_Donyadide.pdf`.
+named with the spreadsheet row number, `CV`,
+`JOB_EVAL_CV_PDF_APPLICANT_NAME`, job role, and company, for example
+`12_CV_Amir_Donyadide_GIS_Analyst_Acme.pdf`. Filename parts are simplified to
+ASCII letters, numbers, and underscores so applicant websites are less likely
+to reject the upload.
 
 Each CV is compiled in its own temporary directory with `latexmk -xelatex`.
 `JOB_EVAL_CV_PHOTO_FILE` defaults to `cv/photo.jpg`; when present, it is copied
