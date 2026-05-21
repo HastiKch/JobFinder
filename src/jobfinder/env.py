@@ -40,7 +40,9 @@ class EnvSettings:
         logger: logging.Logger | None = None,
     ) -> None:
         """Create a settings reader using the provided local values."""
-        self.local_values = dict(local_values or load_local_env())
+        self.local_values = dict(
+            load_local_env() if local_values is None else local_values
+        )
         self.logger = logger
 
     def get(self, name: str, default: str = "") -> str:

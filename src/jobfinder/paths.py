@@ -22,6 +22,9 @@ DEFAULT_MASTER_PROMPT_FILE = PROJECT_ROOT / "prompts" / "master_prompt.txt"
 DEFAULT_CV_FILE = PROJECT_ROOT / "cv" / "master_cv.tex"
 """Default LaTeX CV injected into evaluator prompts."""
 
+DEFAULT_CV_PHOTO_FILE = PROJECT_ROOT / "cv" / "photo.jpg"
+"""Default optional CV photo copied into LaTeX compilation directories."""
+
 GOOGLE_CLIENT_SECRET_FILE = PROJECT_ROOT / "google_client_secret.json"
 """Google OAuth desktop-client credentials file."""
 

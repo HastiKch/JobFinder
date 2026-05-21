@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import html
 import json
+import math
 import re
 from datetime import UTC, datetime
 from typing import Any
@@ -419,9 +420,14 @@ def parse_datetime_value(settings: ScraperSettings, value: Any) -> datetime | No
         timestamp = None
 
     if timestamp is not None:
+        if not math.isfinite(timestamp):
+            return None
         if timestamp > 10_000_000_000:
             timestamp = timestamp / 1000
-        return datetime.fromtimestamp(timestamp, UTC).astimezone(settings.posted_tz)
+        try:
+            return datetime.fromtimestamp(timestamp, UTC).astimezone(settings.posted_tz)
+        except (OverflowError, OSError, ValueError):
+            return None
 
     text = str(value).strip()
     if not text or text == "N/A":

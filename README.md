@@ -29,7 +29,8 @@ The core workflow is:
    runs.
 8. Apply title, company, applicant-count, and posted-window filters.
 9. Export a timestamped worksheet to Excel, Google Sheets, or both.
-10. Optionally evaluate unevaluated rows with OpenAI and write final AI columns
+10. Optionally evaluate unevaluated rows with OpenAI, compile suitable tailored
+    LaTeX CVs into PDFs, upload them to Google Drive, and write final AI columns
     back to the same sheet.
 11. Remove job-description/detail columns and, by default, remove `Not Suitable`
     rows that have more than one unsuitable-reason label.
@@ -42,6 +43,7 @@ Key capabilities:
 - Scheduled and manual GitHub Actions pipeline runs.
 - Service-account Google Sheets integration, with local OAuth fallback.
 - OpenAI-based job-fit evaluation with prompt and CV injection.
+- LaTeX PDF generation for tailored CVs, with Google Drive links in the sheet.
 - Incremental evaluator saves for crash recovery.
 - Runtime reports for CI artifacts.
 - Excel output for local-only runs.
@@ -194,9 +196,12 @@ Excel.
    LaTeX CV content.
 8. Save each completed evaluation immediately, or in batches controlled by
    `JOB_EVAL_SAVE_BATCH_SIZE`.
-9. Finalize by removing legacy AI metadata columns and detail columns such as
+9. Compile generated CV LaTeX into PDFs, upload them to a timestamped Google
+   Drive run folder under `JobFinder`, and write the PDF link or compilation
+   error to `AI CV PDF`.
+10. Finalize by removing legacy AI metadata columns and detail columns such as
    `Job Description`.
-10. Apply `JOB_EVAL_UNSUITABLE_ROW_POLICY`.
+11. Apply `JOB_EVAL_UNSUITABLE_ROW_POLICY`.
 
 Default evaluator policy:
 
@@ -210,9 +215,11 @@ Default evaluator policy:
 ### Requirements
 
 - Python 3.14 or newer.
+- LaTeX tooling for evaluator PDF output: `latexmk` and `xelatex`.
 - Apify API token for scraping.
 - OpenAI API key for `scrape_and_evaluate` or evaluator-only runs.
-- Google service account and editable Google Sheet for the full pipeline.
+- Google service account, editable Google Sheet, and Google Drive access for
+  saved PDFs.
 - Optional local Excel workflow through `openpyxl`.
 
 Install runtime dependencies with Conda:
@@ -228,6 +235,15 @@ Install development dependencies:
 ```bash
 python -m pip install -r requirements-dev.txt
 ```
+
+Install LaTeX tools for CV PDF generation. On Ubuntu/GitHub Actions this is:
+
+```bash
+sudo apt-get install -y latexmk texlive-xetex texlive-latex-extra
+```
+
+On macOS, install a TeX distribution that includes `latexmk` and `xelatex`, such
+as MacTeX.
 
 Install the package in editable mode when you want console scripts:
 
@@ -277,6 +293,7 @@ Edit:
 | `configs/filters.json` | Shared non-secret provider defaults and final filters. | Yes |
 | `prompts/master_prompt.txt` | Private evaluator instructions. | No |
 | `cv/master_cv.tex` | Private LaTeX CV used by evaluator prompts. | No |
+| `cv/photo.jpg` | Optional CV photo copied into the LaTeX build directory. | Only if public |
 
 ### Apify Setup
 
@@ -311,17 +328,38 @@ overridden with:
 JOB_EVAL_OPENAI_MODEL=gpt-5-mini
 ```
 
-### Google Sheets Setup
+### Google Sheets And Drive Setup
 
 Service-account auth is the preferred path for local and GitHub Actions runs:
 
-1. Enable the Google Sheets API in Google Cloud.
+1. Enable the Google Sheets API and Google Drive API in Google Cloud.
 2. Create a service account.
 3. Download a JSON key.
 4. Share the target Google Sheet with the service account's `client_email` as
    Editor.
-5. Save the key locally as `google_service_account.json`.
-6. Set `GOOGLE_SPREADSHEET_ID` or save the ID in `google_spreadsheet_id.txt`.
+5. Share an existing Google Drive folder named `JobFinder` with the same service
+   account as Editor, or let JobFinder create that folder in the service
+   account's Drive.
+6. Save the key locally as `google_service_account.json`.
+7. Set `GOOGLE_SPREADSHEET_ID` or save the ID in `google_spreadsheet_id.txt`.
+
+For a normal personal Gmail/Google Drive account, Drive uploads should use user
+OAuth instead of the service account because service accounts do not have
+personal Drive storage quota. Create an OAuth Desktop client, publish the OAuth
+app to Production, save it as `google_client_secret.json`, and run the Drive
+auth helper once:
+
+```bash
+env PYTHONPATH=src python - <<'PY'
+from jobfinder.google_drive import build_google_drive_service
+
+build_google_drive_service(error_cls=RuntimeError)
+print("Created or refreshed google_token.json")
+PY
+```
+
+Keep `google_token.json` private. For GitHub Actions, paste its contents into
+the `GOOGLE_DRIVE_TOKEN_JSON` secret.
 
 Local OAuth fallback is still supported through `google_client_secret.json` and
 `google_token.json`, but service-account auth is simpler and matches CI.
@@ -518,6 +556,10 @@ Stepstone date filtering maps `rSECONDS` windows to supported day buckets:
 | `JOB_EVAL_RETRY_MAX_DELAY` | `60.0` | Maximum retry delay before jitter. |
 | `JOB_EVAL_OPENAI_TIMEOUT` | `120` | OpenAI SDK request timeout in seconds. |
 | `JOB_EVAL_MAX_OUTPUT_TOKENS` | `9000` | Max tokens for each model response. Must be at least `500`. |
+| `JOB_EVAL_CV_PDF_OUTPUT` | `true` | Compile generated LaTeX CVs to PDFs and upload them to Google Drive. |
+| `JOB_EVAL_CV_PHOTO_FILE` | `cv/photo.jpg` | Optional local photo copied into each isolated LaTeX build directory. |
+| `JOB_EVAL_CV_PDF_TIMEOUT` | `120` | Max seconds allowed for one LaTeX PDF compilation. |
+| `JOB_EVAL_CV_DRIVE_PARENT_FOLDER` | `JobFinder` | Google Drive parent folder for timestamped evaluator PDF folders. |
 | `JOB_EVAL_LARGE_QUEUE_THRESHOLD` | `200` | Enables request pacing when queued rows exceed this count. |
 | `JOB_EVAL_LARGE_QUEUE_SLEEP_MS` | `2000` | Delay between request starts when pacing is enabled. |
 | `JOB_EVAL_SAVE_BATCH_SIZE` | `1` | Number of completed evaluations saved per write. |
@@ -584,6 +626,7 @@ Stable scraper columns:
 | `AI Fit Score` | Filled by evaluator. |
 | `AI Unsuitable Reasons` | Filled for rejected rows. |
 | `AI Tailored CV` | Optional tailored LaTeX CV content. |
+| `AI CV PDF` | Google Drive PDF link, or a compile/upload error for that row. |
 
 The hidden `_jobfinder_seen_jobs` tab is maintained by the scraper. Do not edit
 it manually unless you are deliberately resetting historical dedupe state.
@@ -621,9 +664,11 @@ Required GitHub secrets:
 | `OPENAI_API_KEY` | `scrape_and_evaluate` | OpenAI API key. |
 | `GOOGLE_SPREADSHEET_ID` | all runs | Target spreadsheet ID. |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | all runs | Full service-account JSON key. |
+| `GOOGLE_DRIVE_TOKEN_JSON` | personal Drive PDF uploads | Authorized-user OAuth token JSON from `google_token.json`. |
 | `JOB_KEYWORDS_TEXT` | all runs | Full private keyword file content. |
 | `MASTER_PROMPT_TEXT` | `scrape_and_evaluate` | Full private evaluator prompt. |
 | `MASTER_CV_TEX` | `scrape_and_evaluate` | Full private LaTeX CV. |
+| `CV_PHOTO_BASE64` | optional | Base64-encoded private CV photo for CI. Use only if you do not commit a public `cv/photo.jpg`. |
 
 More detailed runbooks are kept in:
 
@@ -752,7 +797,9 @@ cleanup, run the relevant focused tests plus the full suite.
 | Apify transient 502/503/504 or timeout | Actor/API instability or too much concurrency. | Lower search concurrency, lower per-search limits, or increase timeout. |
 | No jobs found | Search/filter window too narrow or provider config mismatch. | Check keywords, provider source, posted-time window, Stepstone location/start URLs, and final filters. |
 | Google auth fails | Wrong credential type or missing Sheet permission. | Use service-account JSON and share the sheet with its `client_email` as Editor. |
+| Drive upload fails | Drive API disabled or folder not shared with the service account. | Enable Google Drive API and share the `JobFinder` folder as Editor, or allow the service account to create it. |
 | Spreadsheet not found | Full URL pasted instead of ID, or wrong account. | Use only the ID from `/spreadsheets/d/<id>/`. |
+| CV PDF cell shows `LaTeX compilation failed` | Missing LaTeX package, invalid generated LaTeX, or missing referenced photo. | Install `latexmk` and `xelatex`, check the generated LaTeX, and ensure `JOB_EVAL_CV_PHOTO_FILE` points to the expected image. |
 | Evaluator skips rows | `AI Verdict` already exists and is not `Error`. | Clear the verdict cells or create a fresh run tab. |
 | OpenAI `insufficient_quota` | API project has no usable quota/billing. | Add billing/credits to the OpenAI project and rerun evaluator. |
 | OpenAI rate limits | Concurrency or batch size too high. | Lower `JOB_EVAL_CONCURRENCY`, `JOB_EVAL_BATCH_SIZE`, or add pacing. |
@@ -819,6 +866,7 @@ google_spreadsheet_id.txt
 configs/keywords.txt
 prompts/master_prompt.txt
 cv/master_cv.tex
+cv/photo.jpg  # unless the photo is intentionally public
 jobs.xlsx
 jobs_*.xlsx
 ```

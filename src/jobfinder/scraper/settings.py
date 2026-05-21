@@ -36,6 +36,9 @@ DEFAULT_APIFY_RUN_TIMEOUT_SECONDS = 3600
 DEFAULT_APIFY_CLIENT_TIMEOUT_SECONDS = 120
 DEFAULT_APIFY_TRANSIENT_ERROR_RETRIES = 5
 DEFAULT_APIFY_RETRY_DELAY_SECONDS = 30
+MAX_SEARCH_CONCURRENCY = 50
+MAX_PROVIDER_CONCURRENCY = 50
+MAX_APIFY_BATCH_SIZE = 25
 
 LINKEDIN_ACTOR_ID = "curious_coder~linkedin-jobs-scraper"
 INDEED_ACTOR_ID = "valig~indeed-jobs-scraper"
@@ -318,7 +321,10 @@ def load_scraper_settings(env: EnvSettings | None = None) -> ScraperSettings:
         0,
         env.get_int("JOBSCRAPER_APIFY_MEMORY_LIMIT_MB", 0),
     )
-    search_concurrency = max(1, env.get_int("JOBSCRAPER_SEARCH_CONCURRENCY", 15))
+    search_concurrency = min(
+        MAX_SEARCH_CONCURRENCY,
+        max(1, env.get_int("JOBSCRAPER_SEARCH_CONCURRENCY", 15)),
+    )
     if apify_memory_limit_mb:
         search_concurrency = min(
             search_concurrency,
@@ -348,7 +354,10 @@ def load_scraper_settings(env: EnvSettings | None = None) -> ScraperSettings:
         max_results_per_search=max_results_per_search,
         indeed_max_results_per_search=indeed_max_results,
         search_concurrency=search_concurrency,
-        apify_batch_size=max(1, env.get_int("JOBSCRAPER_APIFY_BATCH_SIZE", 1)),
+        apify_batch_size=min(
+            MAX_APIFY_BATCH_SIZE,
+            max(1, env.get_int("JOBSCRAPER_APIFY_BATCH_SIZE", 1)),
+        ),
         apify_memory_limit_mb=apify_memory_limit_mb,
         apify_run_memory_mb=apify_run_memory_mb,
         apify_run_timeout_seconds=apify_run_timeout_seconds,
@@ -413,7 +422,10 @@ def load_scraper_settings(env: EnvSettings | None = None) -> ScraperSettings:
         ),
         indeed_country=env.get("INDEED_COUNTRY", "DE").upper(),
         indeed_location=env.get("INDEED_LOCATION", location),
-        indeed_max_concurrency=max(1, env.get_int("INDEED_MAX_CONCURRENCY", 5)),
+        indeed_max_concurrency=min(
+            MAX_PROVIDER_CONCURRENCY,
+            max(1, env.get_int("INDEED_MAX_CONCURRENCY", 5)),
+        ),
         indeed_save_only_unique_items=env.get_bool(
             "INDEED_SAVE_ONLY_UNIQUE_ITEMS", True
         ),
@@ -428,7 +440,10 @@ def load_scraper_settings(env: EnvSettings | None = None) -> ScraperSettings:
         stepstone_start_urls=parse_env_list(env.get("STEPSTONE_START_URLS"))
         or config_list(filter_config, "stepstone_search", "start_urls", []),
         stepstone_max_results_per_search=stepstone_max_results,
-        stepstone_max_concurrency=max(1, env.get_int("STEPSTONE_MAX_CONCURRENCY", 10)),
+        stepstone_max_concurrency=min(
+            MAX_PROVIDER_CONCURRENCY,
+            max(1, env.get_int("STEPSTONE_MAX_CONCURRENCY", 10)),
+        ),
         stepstone_min_concurrency=max(1, env.get_int("STEPSTONE_MIN_CONCURRENCY", 1)),
         stepstone_max_request_retries=max(
             0,

@@ -7,6 +7,7 @@ EVALUATION_OUTPUT_COLUMNS = [
     "AI Fit Score",
     "AI Unsuitable Reasons",
     "AI Tailored CV",
+    "AI CV PDF",
 ]
 """AI columns kept in the final spreadsheet."""
 

@@ -8,7 +8,10 @@ from pathlib import Path
 
 import pytest
 
-from jobfinder.google_sheets import build_google_sheets_service
+from jobfinder.google_sheets import (
+    build_google_api_service,
+    build_google_sheets_service,
+)
 
 
 def install_fake_google_modules(
@@ -28,6 +31,8 @@ def install_fake_google_modules(
     user_credentials = types.ModuleType("google.oauth2.credentials")
     google_auth_oauthlib = types.ModuleType("google_auth_oauthlib")
     google_auth_flow = types.ModuleType("google_auth_oauthlib.flow")
+    google_auth_httplib2 = types.ModuleType("google_auth_httplib2")
+    httplib2 = types.ModuleType("httplib2")
     googleapiclient = types.ModuleType("googleapiclient")
     discovery = types.ModuleType("googleapiclient.discovery")
 
@@ -48,13 +53,25 @@ def install_fake_google_modules(
         def run_local_server(self, port):
             return None
 
+    class Http:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+    class AuthorizedHttp:
+        def __init__(self, credentials, http):
+            self.credentials = credentials
+            self.http = http
+
     def default_service_account_loader(filename, scopes):
         return "service-account-creds"
 
     def default_user_credentials_loader(filename, scopes):
         pytest.fail("OAuth token auth should not run.")
 
-    def default_build(service_name, version, credentials, cache_discovery):
+    def default_build(
+        service_name, version, credentials=None, http=None, cache_discovery=False
+    ):
+        credentials = credentials or getattr(http, "credentials", None)
         return {
             "service_name": service_name,
             "version": version,
@@ -72,6 +89,8 @@ def install_fake_google_modules(
     service_account.Credentials = ServiceAccountCredentials
     user_credentials.Credentials = UserCredentials
     google_auth_flow.InstalledAppFlow = InstalledAppFlow
+    google_auth_httplib2.AuthorizedHttp = AuthorizedHttp
+    httplib2.Http = Http
     discovery.build = build_func or default_build
 
     google.auth = google_auth
@@ -93,6 +112,8 @@ def install_fake_google_modules(
         "google.oauth2.credentials": user_credentials,
         "google_auth_oauthlib": google_auth_oauthlib,
         "google_auth_oauthlib.flow": google_auth_flow,
+        "google_auth_httplib2": google_auth_httplib2,
+        "httplib2": httplib2,
         "googleapiclient": googleapiclient,
         "googleapiclient.discovery": discovery,
     }
@@ -118,7 +139,14 @@ def test_build_google_sheets_service_prefers_service_account(tmp_path, monkeypat
     def fail_from_authorized_user_file(filename, scopes):
         pytest.fail("OAuth token auth should not run when service account exists.")
 
-    def fake_build(service_name, version, credentials, cache_discovery):
+    def fake_build(
+        service_name,
+        version,
+        credentials=None,
+        http=None,
+        cache_discovery=False,
+    ):
+        credentials = credentials or getattr(http, "credentials", None)
         calls["build"] = (service_name, version, credentials, cache_discovery)
         return "sheets-service"
 
@@ -145,6 +173,106 @@ def test_build_google_sheets_service_prefers_service_account(tmp_path, monkeypat
         "service-account-creds",
         False,
     )
+
+
+def test_build_google_api_service_uses_requested_api_for_service_account(
+    tmp_path, monkeypatch
+):
+    """Shared service-account auth should build the requested Google API."""
+    service_account_file = tmp_path / "google_service_account.json"
+    service_account_file.write_text("{}", encoding="utf-8")
+    calls: dict[str, object] = {}
+
+    def fake_build(
+        service_name,
+        version,
+        credentials=None,
+        http=None,
+        cache_discovery=False,
+    ):
+        credentials = credentials or getattr(http, "credentials", None)
+        calls["build"] = (service_name, version, credentials, cache_discovery)
+        return "drive-service"
+
+    install_fake_google_modules(monkeypatch, build_func=fake_build)
+
+    service = build_google_api_service(
+        "drive",
+        "v3",
+        error_cls=RuntimeError,
+        service_account_file=service_account_file,
+        token_file=tmp_path / "google_token.json",
+        client_secret_file=tmp_path / "google_client_secret.json",
+        scopes=["https://www.googleapis.com/auth/drive"],
+    )
+
+    assert service == "drive-service"
+    assert calls["build"] == (
+        "drive",
+        "v3",
+        "service-account-creds",
+        False,
+    )
+
+
+def test_build_google_api_service_can_prefer_oauth_token_over_service_account(
+    tmp_path, monkeypatch
+):
+    """Drive uploads for personal accounts should be able to use user OAuth."""
+    service_account_file = tmp_path / "google_service_account.json"
+    token_file = tmp_path / "google_token.json"
+    service_account_file.write_text("{}", encoding="utf-8")
+    token_file.write_text("{}", encoding="utf-8")
+    calls: dict[str, object] = {}
+
+    class ValidCredentials:
+        valid = True
+
+        def has_scopes(self, scopes):
+            calls["scopes"] = scopes
+            return True
+
+    def fail_from_service_account_file(filename, scopes):
+        pytest.fail("OAuth token should be preferred for this Drive service.")
+
+    def fake_from_authorized_user_file(filename, scopes):
+        calls["token_file"] = Path(filename)
+        return ValidCredentials()
+
+    def fake_build(
+        service_name,
+        version,
+        credentials=None,
+        http=None,
+        cache_discovery=False,
+    ):
+        credentials = credentials or getattr(http, "credentials", None)
+        calls["build"] = (service_name, version, credentials, cache_discovery)
+        return "drive-service"
+
+    install_fake_google_modules(
+        monkeypatch,
+        service_account_loader=fail_from_service_account_file,
+        user_credentials_loader=fake_from_authorized_user_file,
+        build_func=fake_build,
+    )
+
+    service = build_google_api_service(
+        "drive",
+        "v3",
+        error_cls=RuntimeError,
+        service_account_file=service_account_file,
+        token_file=token_file,
+        client_secret_file=tmp_path / "google_client_secret.json",
+        scopes=["https://www.googleapis.com/auth/drive"],
+        prefer_service_account=False,
+    )
+
+    assert service == "drive-service"
+    assert calls["token_file"] == token_file
+    service_name, version, credentials, cache_discovery = calls["build"]
+    assert (service_name, version, cache_discovery) == ("drive", "v3", False)
+    assert isinstance(credentials, ValidCredentials)
 
 
 def test_build_google_sheets_service_missing_credentials_message(tmp_path, monkeypatch):

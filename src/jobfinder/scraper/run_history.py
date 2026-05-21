@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
 import jobfinder.dedupe.normalize as dedupe_normalize
-from jobfinder.google_sheets import quote_sheet_name
+from jobfinder.google_sheets import google_execute, quote_sheet_name
 from jobfinder.scraper.normalize import (
     get_apply_url,
     get_company,
@@ -411,7 +411,7 @@ def batch_get_values(
     value_ranges: list[dict[str, Any]] = []
     chunk_size = 50
     for start_idx in range(0, len(ranges), chunk_size):
-        response = (
+        response = google_execute(
             service.spreadsheets()
             .values()
             .batchGet(
@@ -419,7 +419,6 @@ def batch_get_values(
                 ranges=ranges[start_idx : start_idx + chunk_size],
                 valueRenderOption=value_render_option,
             )
-            .execute()
         )
         value_ranges.extend(response.get("valueRanges", []))
     return value_ranges
@@ -432,14 +431,13 @@ def seen_jobs_index_exists(sheet_names: list[str]) -> bool:
 
 def read_seen_jobs_index(service: Any, spreadsheet_id: str) -> set[str]:
     """Read canonical job keys from the maintained seen-jobs index tab."""
-    response = (
+    response = google_execute(
         service.spreadsheets()
         .values()
         .get(
             spreadsheetId=spreadsheet_id,
             range=f"{quote_sheet_name(SEEN_JOBS_SHEET_NAME)}!A2:A",
         )
-        .execute()
     )
     values = response.get("values", [])
     keys: set[str] = set()
@@ -459,27 +457,34 @@ def ensure_seen_jobs_index_sheet(
     if seen_jobs_index_exists(sheet_names):
         return
 
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=spreadsheet_id,
-        body={
-            "requests": [
-                {
-                    "addSheet": {
-                        "properties": {
-                            "title": SEEN_JOBS_SHEET_NAME,
-                            "hidden": True,
+    google_execute(
+        service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={
+                "requests": [
+                    {
+                        "addSheet": {
+                            "properties": {
+                                "title": SEEN_JOBS_SHEET_NAME,
+                                "hidden": True,
+                            }
                         }
                     }
-                }
-            ]
-        },
-    ).execute()
-    service.spreadsheets().values().update(
-        spreadsheetId=spreadsheet_id,
-        range=f"{quote_sheet_name(SEEN_JOBS_SHEET_NAME)}!A1",
-        valueInputOption="RAW",
-        body={"values": [SEEN_JOBS_HEADER]},
-    ).execute()
+                ]
+            },
+        ),
+        retries=0,
+    )
+    google_execute(
+        service.spreadsheets()
+        .values()
+        .update(
+            spreadsheetId=spreadsheet_id,
+            range=f"{quote_sheet_name(SEEN_JOBS_SHEET_NAME)}!A1",
+            valueInputOption="RAW",
+            body={"values": [SEEN_JOBS_HEADER]},
+        )
+    )
 
 
 def append_seen_job_keys(
@@ -498,13 +503,18 @@ def append_seen_job_keys(
     if not new_keys:
         return
 
-    service.spreadsheets().values().append(
-        spreadsheetId=spreadsheet_id,
-        range=f"{quote_sheet_name(SEEN_JOBS_SHEET_NAME)}!A:A",
-        valueInputOption="RAW",
-        insertDataOption="INSERT_ROWS",
-        body={"values": [[key] for key in new_keys]},
-    ).execute()
+    google_execute(
+        service.spreadsheets()
+        .values()
+        .append(
+            spreadsheetId=spreadsheet_id,
+            range=f"{quote_sheet_name(SEEN_JOBS_SHEET_NAME)}!A:A",
+            valueInputOption="RAW",
+            insertDataOption="INSERT_ROWS",
+            body={"values": [[key] for key in new_keys]},
+        ),
+        retries=0,
+    )
 
 
 def sheet_header_indexes(headers: list[Any]) -> dict[str, int]:

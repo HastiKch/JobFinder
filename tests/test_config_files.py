@@ -12,6 +12,7 @@ from jobfinder.config_files import (
     load_filter_config,
     load_keywords,
 )
+from jobfinder.env import EnvSettings
 
 
 def test_load_keywords_ignores_blank_lines_and_comments(tmp_path):
@@ -44,3 +45,15 @@ def test_filter_config_helpers_normalize_values(tmp_path):
     assert config_str(config, "section", "name") == "Germany"
     assert config_int(config, "section", "limit", 0) == 42
     assert config_list(config, "section", "items", []) == ["A", "B"]
+
+
+def test_env_settings_respects_explicit_empty_local_values(monkeypatch):
+    """Passing an explicit empty mapping should not fall back to the real .env file."""
+    monkeypatch.setattr(
+        "jobfinder.env.load_local_env",
+        lambda: pytest.fail("EnvSettings({}) unexpectedly loaded .env"),
+    )
+
+    settings = EnvSettings({})
+
+    assert settings.get("MISSING_SETTING", "fallback") == "fallback"

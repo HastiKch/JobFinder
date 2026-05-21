@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from jobfinder.google_sheets import build_google_sheets_service, quote_sheet_name
+from jobfinder.google_sheets import (
+    build_google_sheets_service,
+    google_execute,
+    quote_sheet_name,
+)
 from jobfinder.scraper.export_rows import HEADER, make_job_rows, unique_name
 from jobfinder.scraper.run_history import append_seen_job_keys, job_identity_keys
 from jobfinder.scraper.settings import SPREADSHEET_TITLE, ScraperSettings
@@ -23,12 +27,16 @@ def update_values(
     service: Any, spreadsheet_id: str, sheet_name: str, rows: list[list[Any]]
 ) -> None:
     """Write all scraper rows to a Google Sheet tab."""
-    service.spreadsheets().values().update(
-        spreadsheetId=spreadsheet_id,
-        range=f"{quote_sheet_name(sheet_name)}!A1",
-        valueInputOption="USER_ENTERED",
-        body={"values": rows},
-    ).execute()
+    google_execute(
+        service.spreadsheets()
+        .values()
+        .update(
+            spreadsheetId=spreadsheet_id,
+            range=f"{quote_sheet_name(sheet_name)}!A1",
+            valueInputOption="USER_ENTERED",
+            body={"values": rows},
+        )
+    )
 
 
 def header_index(name: str) -> int:
@@ -164,10 +172,12 @@ def format_spreadsheet(
         date_time_format_request(sheet_id, "Posted", editable_row_count),
     ]
 
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=spreadsheet_id,
-        body={"requests": requests_body},
-    ).execute()
+    google_execute(
+        service.spreadsheets().batchUpdate(
+            spreadsheetId=spreadsheet_id,
+            body={"requests": requests_body},
+        )
+    )
 
 
 def read_google_spreadsheet_id(settings: ScraperSettings) -> str:
@@ -181,13 +191,11 @@ def read_google_spreadsheet_id(settings: ScraperSettings) -> str:
 
 def get_google_spreadsheet(service: Any, spreadsheet_id: str) -> dict[str, Any]:
     """Fetch basic spreadsheet metadata for an existing spreadsheet."""
-    return (
-        service.spreadsheets()
-        .get(
+    return google_execute(
+        service.spreadsheets().get(
             spreadsheetId=spreadsheet_id,
             fields="spreadsheetId,spreadsheetUrl,sheets(properties(sheetId,title))",
         )
-        .execute()
     )
 
 
@@ -195,16 +203,15 @@ def create_google_spreadsheet(
     settings: ScraperSettings, service: Any
 ) -> tuple[dict[str, Any], str, int]:
     """Create the default Google spreadsheet and initial run sheet."""
-    spreadsheet = (
-        service.spreadsheets()
-        .create(
+    spreadsheet = google_execute(
+        service.spreadsheets().create(
             body={
                 "properties": {"title": SPREADSHEET_TITLE},
                 "sheets": [{"properties": {"title": settings.run_sheet_name}}],
             },
             fields="spreadsheetId,spreadsheetUrl,sheets(properties(sheetId,title))",
-        )
-        .execute()
+        ),
+        retries=0,
     )
     settings.spreadsheet_id_file.write_text(
         spreadsheet["spreadsheetId"], encoding="utf-8"
@@ -221,13 +228,12 @@ def add_google_run_sheet(
 ) -> tuple[str, int]:
     """Add a new timestamped worksheet to an existing spreadsheet."""
     sheet_name = unique_name(existing_names, settings.run_sheet_name)
-    response = (
-        service.spreadsheets()
-        .batchUpdate(
+    response = google_execute(
+        service.spreadsheets().batchUpdate(
             spreadsheetId=spreadsheet_id,
             body={"requests": [{"addSheet": {"properties": {"title": sheet_name}}}]},
-        )
-        .execute()
+        ),
+        retries=0,
     )
     sheet_id = response["replies"][0]["addSheet"]["properties"]["sheetId"]
     return sheet_name, sheet_id

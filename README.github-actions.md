@@ -37,6 +37,10 @@ runs, central logs, and private values stored as GitHub repository secrets.
 - An OpenAI API key when using `scrape_and_evaluate`.
 - A Google service account JSON key.
 - A Google Sheet shared with the service-account email as Editor.
+- Google Drive API enabled, plus a `JobFinder` Drive folder shared with the
+  service-account email as Editor if you want PDFs in a user-visible folder.
+- For personal Gmail/Google Drive, an authorized-user OAuth token JSON for Drive
+  uploads.
 - Private keyword, prompt, and CV content ready to paste into repository secrets.
 
 ## How The Workflow Runs
@@ -51,14 +55,15 @@ It runs the pipeline on GitHub:
 
 1. Checks out the repository.
 2. Sets up Python 3.14.
-3. Installs dependencies from `requirements.txt`.
+3. Installs LaTeX tools and dependencies from `requirements.txt`.
 4. Validates required GitHub secrets.
 5. Writes private keywords, prompt, CV, and Google credentials into temporary runner files.
 6. Runs a provider-access preflight.
 7. Scrapes jobs into Google Sheets.
 8. Evaluates every unevaluated row with OpenAI when `scrape_and_evaluate` is selected.
-9. Uploads JSON and Markdown run reports as artifacts.
-10. Removes private runtime files from the runner.
+9. Compiles generated LaTeX CVs to PDFs and uploads them to Google Drive.
+10. Uploads JSON and Markdown run reports as artifacts.
+11. Removes private runtime files from the runner.
 
 ## 1. Push The Repository To GitHub
 
@@ -104,18 +109,47 @@ Use a Google service account for GitHub Actions. It does not require a
 browser-based OAuth refresh token and works well on temporary CI runners.
 
 1. Open Google Cloud Console.
-2. Enable the Google Sheets API.
+2. Enable the Google Sheets API and Google Drive API.
 3. Go to `IAM & Admin -> Service Accounts`.
 4. Create a service account.
 5. Create and download a JSON key for that service account.
 6. Copy the `client_email` value from the JSON key.
 7. Open your target Google Sheet and share it with that email as Editor.
+8. Share an existing Google Drive folder named `JobFinder` with that email as
+   Editor, or let the workflow create a service-account-owned `JobFinder`
+   folder.
 
 Copy the full JSON key into the GitHub secret:
 
 ```text
 GOOGLE_SERVICE_ACCOUNT_JSON
 ```
+
+For a normal personal Gmail/Google Drive account, the service account can still
+update Sheets, but Drive PDF uploads need user OAuth so the files use your Drive
+storage quota.
+
+1. In Google Cloud, open the OAuth consent screen.
+2. Set the app publishing status to **In production** before generating the
+   token. Testing mode refresh tokens expire after 7 days.
+3. Create an OAuth client of type **Desktop app**.
+4. Download the client JSON locally as `google_client_secret.json`.
+5. Run this once from the repository:
+
+   ```bash
+   env PYTHONPATH=src python - <<'PY'
+   from jobfinder.google_drive import build_google_drive_service
+
+   build_google_drive_service(error_cls=RuntimeError)
+   print("Created or refreshed google_token.json")
+   PY
+   ```
+
+6. Copy `google_token.json` into the GitHub secret:
+
+   ```text
+   GOOGLE_DRIVE_TOKEN_JSON
+   ```
 
 ## 4. Prepare Private Content
 
@@ -136,7 +170,9 @@ cp cv/master_cv.example.tex cv/master_cv.tex
 | `configs/keywords.txt` | `JOB_KEYWORDS_TEXT` |
 | `prompts/master_prompt.txt` | `MASTER_PROMPT_TEXT` |
 | `cv/master_cv.tex` | `MASTER_CV_TEX` |
+| `cv/photo.jpg` | `CV_PHOTO_BASE64` (optional, base64 encoded) |
 | `google_service_account.json` | `GOOGLE_SERVICE_ACCOUNT_JSON` |
+| `google_token.json` | `GOOGLE_DRIVE_TOKEN_JSON` |
 
 On macOS, copy each value like this:
 
@@ -145,9 +181,17 @@ pbcopy < configs/keywords.txt
 pbcopy < prompts/master_prompt.txt
 pbcopy < cv/master_cv.tex
 pbcopy < google_service_account.json
+pbcopy < google_token.json
 ```
 
 Paste each copied value into the matching GitHub secret.
+
+If your LaTeX CV references a private photo and you do not commit a public
+`cv/photo.jpg`, encode it for the optional `CV_PHOTO_BASE64` secret:
+
+```bash
+base64 -i cv/photo.jpg | pbcopy
+```
 
 ## 5. Add GitHub Repository Secrets
 
@@ -165,9 +209,11 @@ Add these secrets exactly:
 | `OPENAI_API_KEY` | `scrape_and_evaluate` | Your OpenAI API key, for example `sk-...` or `sk-proj-...`. |
 | `GOOGLE_SPREADSHEET_ID` | All runs | The spreadsheet ID from the Google Sheet URL. |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | All runs | The full contents of the service-account JSON key. |
+| `GOOGLE_DRIVE_TOKEN_JSON` | Personal Drive PDF uploads | The full contents of `google_token.json`. |
 | `JOB_KEYWORDS_TEXT` | All runs | The full contents of `configs/keywords.txt`. |
 | `MASTER_PROMPT_TEXT` | `scrape_and_evaluate` | The full contents of `prompts/master_prompt.txt`. |
 | `MASTER_CV_TEX` | `scrape_and_evaluate` | The full contents of `cv/master_cv.tex`. |
+| `CV_PHOTO_BASE64` | Optional | Base64-encoded `cv/photo.jpg` for LaTeX PDF generation when the photo is private. |
 
 ## 6. Run The Workflow Manually
 
@@ -212,7 +258,8 @@ Choose the unsuitable-row policy:
 Click **Run workflow**.
 
 The workflow creates a new dated tab in your Google Sheet. In
-`scrape_and_evaluate` mode, it then evaluates the jobs in that tab.
+`scrape_and_evaluate` mode, it then evaluates the jobs in that tab and writes
+Drive PDF links to the `AI CV PDF` column.
 
 ## 7. Scheduled Runs
 
@@ -259,6 +306,9 @@ JOBSCRAPER_POSTED_TIMEZONE: Europe/Berlin
 JOB_EVAL_OPENAI_MODEL: "gpt-5-mini"
 JOB_EVAL_CONCURRENCY: "8"
 JOB_EVAL_BATCH_SIZE: "40"
+JOB_EVAL_CV_PDF_OUTPUT: "true"
+JOB_EVAL_CV_PHOTO_FILE: cv/photo.jpg
+JOB_EVAL_CV_PDF_TIMEOUT: "120"
 JOB_EVAL_LARGE_QUEUE_THRESHOLD: "200"
 JOB_EVAL_LARGE_QUEUE_SLEEP_MS: "2000"
 JOB_EVAL_UNSUITABLE_ROW_POLICY: ${{ github.event.inputs.unsuitable_rows || 'single_label_only' }}
@@ -313,8 +363,10 @@ Use GitHub secrets for private values:
 | Search keywords | `JOB_KEYWORDS_TEXT` |
 | Evaluator prompt | `MASTER_PROMPT_TEXT` |
 | CV content | `MASTER_CV_TEX` |
+| Private CV photo | `CV_PHOTO_BASE64` |
 | API keys | `APIFY_API_TOKEN`, `OPENAI_API_KEY` |
 | Google Sheet access | `GOOGLE_SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON` |
+| Google Drive PDF uploads | `GOOGLE_DRIVE_TOKEN_JSON` |
 
 ## Troubleshooting GitHub Actions
 
@@ -323,6 +375,8 @@ Use GitHub secrets for private values:
 | `Missing repository secret ...` | Add the named secret under GitHub repo settings. |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` error | Copy the full service-account JSON key, not an OAuth client JSON. |
 | Google authentication fails | Confirm the spreadsheet is shared with the service-account `client_email` as Editor. |
+| Drive PDF links fail | Enable Google Drive API. For personal Drive, add `GOOGLE_DRIVE_TOKEN_JSON`; service-account-only uploads can fail with storage quota errors. |
+| `LaTeX compilation failed` in `AI CV PDF` | Check that `latexmk`/`xelatex` installed, the generated LaTeX is valid, and any referenced photo is available through committed `cv/photo.jpg` or `CV_PHOTO_BASE64`. |
 | Spreadsheet not found | Check that `GOOGLE_SPREADSHEET_ID` is only the ID, not the full URL. |
 | Workflow cannot push or fetch repo | Check GitHub authentication and repository permissions. |
 | OpenAI rate-limit retries | Lower `JOB_EVAL_CONCURRENCY` and `JOB_EVAL_BATCH_SIZE`. |

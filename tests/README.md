@@ -33,6 +33,7 @@ python -m pytest
 | `test_scraper_run_history.py` | Previous-run windows, exact posted filtering, historical duplicate keys, and seen-jobs index behavior. |
 | `test_dedupe_matching.py` | Cross-provider matching, blockers, provenance, and historical dedupe identity. |
 | `test_google_sheets.py` | Service-account preference, missing credential messages, and OAuth token rewrite permissions. |
+| `test_cv_pdf_output.py` | PDF filename sanitization, CV ID assignment, LaTeX compile failures, Drive folder naming, and mocked Drive uploads. |
 | `test_indeed_provider.py` | Indeed actor payloads and normalization. |
 | `test_stepstone_provider.py` | Stepstone actor payloads and normalization. |
 | `test_evaluator_parsing.py` | Header updates, prompt row extraction, model-response parsing, and cleanup column selection. |
@@ -61,6 +62,7 @@ If a new test needs network access, prefer adding a fake adapter seam instead.
 | Dedupe identity | `test_dedupe_matching.py`, `test_scraper_run_history.py`. |
 | Spreadsheet schema | `test_scraper_export_rows.py`, `test_evaluator_parsing.py`, `test_evaluator_storage.py`. |
 | Evaluator prompt or parsing | `test_evaluator_parsing.py`, `test_evaluator_openai_client.py`. |
+| CV PDF output | `test_cv_pdf_output.py`, `test_evaluator_storage.py`. |
 | Pipeline/GitHub settings | `test_pipeline_cli.py`, `test_scraper_settings.py`. |
 
 ## Maintaining Tests

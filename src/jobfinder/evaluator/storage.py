@@ -18,11 +18,16 @@ from jobfinder.evaluator.models import (
     JobEvaluation,
 )
 from jobfinder.evaluator.parsing import normalize_header, trim_trailing_blank_headers
-from jobfinder.google_sheets import build_google_sheets_service, quote_sheet_name
+from jobfinder.google_sheets import (
+    build_google_sheets_service,
+    google_execute,
+    quote_sheet_name,
+)
 from jobfinder.paths import GOOGLE_SPREADSHEET_ID_FILE
 
 LABEL_SEPARATOR_RE = re.compile(r"[;\n]+")
 LIST_MARKER_RE = re.compile(r"^\s*(?:[-*]|\d+[.)])\s*")
+GOOGLE_BATCH_REQUEST_CHUNK_SIZE = 500
 
 
 def resolve_sheet_name(existing_names: list[str], requested: str) -> str:
@@ -220,18 +225,18 @@ def read_google_input(
     requested_sheet: str,
 ) -> tuple[str, list[str], list[list[Any]]]:
     """Read headers and rows from a Google Sheet tab."""
-    metadata = (
-        service.spreadsheets()
-        .get(spreadsheetId=spreadsheet_id, fields="sheets(properties(title))")
-        .execute()
+    metadata = google_execute(
+        service.spreadsheets().get(
+            spreadsheetId=spreadsheet_id,
+            fields="sheets(properties(title))",
+        )
     )
     sheet_names = [sheet["properties"]["title"] for sheet in metadata.get("sheets", [])]
     sheet_name = resolve_sheet_name(sheet_names, requested_sheet)
-    response = (
+    response = google_execute(
         service.spreadsheets()
         .values()
         .get(spreadsheetId=spreadsheet_id, range=quote_sheet_name(sheet_name))
-        .execute()
     )
     values = response.get("values", [])
     if not values:
@@ -278,13 +283,17 @@ def write_google_output(
             )
 
     for idx in range(0, len(data), 500):
-        service.spreadsheets().values().batchUpdate(
-            spreadsheetId=spreadsheet_id,
-            body={
-                "valueInputOption": "RAW",
-                "data": data[idx : idx + 500],
-            },
-        ).execute()
+        google_execute(
+            service.spreadsheets()
+            .values()
+            .batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={
+                    "valueInputOption": "RAW",
+                    "data": data[idx : idx + 500],
+                },
+            )
+        )
 
     if cleanup_columns:
         if remove_rejected_rows:
@@ -303,10 +312,11 @@ def write_google_output(
 
 def get_google_sheet_id(service: Any, spreadsheet_id: str, sheet_name: str) -> int:
     """Return the numeric Google Sheets tab ID for a sheet title."""
-    metadata = (
-        service.spreadsheets()
-        .get(spreadsheetId=spreadsheet_id, fields="sheets(properties(sheetId,title))")
-        .execute()
+    metadata = google_execute(
+        service.spreadsheets().get(
+            spreadsheetId=spreadsheet_id,
+            fields="sheets(properties(sheetId,title))",
+        )
     )
     for sheet in metadata.get("sheets", []):
         properties = sheet.get("properties", {})
@@ -321,11 +331,10 @@ def remove_google_rows_after_evaluation(
     sheet_name: str,
 ) -> None:
     """Delete not-suitable Google Sheet rows unless they have exactly one label."""
-    response = (
+    response = google_execute(
         service.spreadsheets()
         .values()
         .get(spreadsheetId=spreadsheet_id, range=quote_sheet_name(sheet_name))
-        .execute()
     )
     values = response.get("values", [])
     if not values:
@@ -351,10 +360,7 @@ def remove_google_rows_after_evaluation(
         }
         for row_number in sorted(row_numbers, reverse=True)
     ]
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=spreadsheet_id,
-        body={"requests": requests},
-    ).execute()
+    batch_update_google_requests(service, spreadsheet_id, requests)
 
 
 def remove_google_columns_after_evaluation(
@@ -382,7 +388,22 @@ def remove_google_columns_after_evaluation(
         }
         for column_idx in sorted(column_indexes, reverse=True)
     ]
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=spreadsheet_id,
-        body={"requests": requests},
-    ).execute()
+    batch_update_google_requests(service, spreadsheet_id, requests)
+
+
+def batch_update_google_requests(
+    service: Any,
+    spreadsheet_id: str,
+    requests: list[dict[str, Any]],
+) -> None:
+    """Send Google Sheets batchUpdate requests in bounded chunks."""
+    for idx in range(0, len(requests), GOOGLE_BATCH_REQUEST_CHUNK_SIZE):
+        google_execute(
+            service.spreadsheets().batchUpdate(
+                spreadsheetId=spreadsheet_id,
+                body={
+                    "requests": requests[idx : idx + GOOGLE_BATCH_REQUEST_CHUNK_SIZE]
+                },
+            ),
+            retries=0,
+        )

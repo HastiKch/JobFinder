@@ -23,6 +23,8 @@ jobfinder-evaluate
 | `models.py` | Evaluation dataclasses, final AI output columns, and spreadsheet-safe value handling. |
 | `parsing.py` | Header normalization, job-record extraction, prompt construction, and model-response parsing. |
 | `openai_client.py` | OpenAI Responses API integration, retry classification, concurrency, batching, and pacing. |
+| `latex.py` | Isolated LaTeX compilation with captured compiler errors. |
+| `pdf_output.py` | CV PDF ID assignment, filename sanitization, Drive folder creation, upload orchestration, and PDF sheet values. |
 | `storage.py` | Excel and Google Sheets read/write adapters and final cleanup. |
 | `service.py` | End-to-end evaluator orchestration outside the CLI. |
 | `cli.py` | CLI argument parsing, logging, error handling, and report writing. |
@@ -44,6 +46,8 @@ sequenceDiagram
     Service->>OpenAI: evaluate_records()
     OpenAI-->>Service: JobEvaluation per row
     Service->>Storage: incremental save
+    Service->>Service: compile CV PDFs and upload to Drive
+    Service->>Storage: save PDF links/errors
     Service->>Storage: final cleanup
 ```
 
@@ -95,6 +99,7 @@ through `models.py`:
 - `AI Fit Score`
 - `AI Unsuitable Reasons`
 - `AI Tailored CV`
+- `AI CV PDF`
 
 Legacy AI metadata columns are recognized and removed during final cleanup:
 
@@ -116,6 +121,21 @@ written immediately. This makes long evaluation runs recoverable: a later
 OpenAI, Google, or process failure does not erase completed rows.
 
 Final cleanup runs after all queued rows finish.
+
+## PDF Output
+
+When `JOB_EVAL_CV_PDF_OUTPUT=true`, suitable rows with generated LaTeX CVs are
+assigned run-local IDs from `1` to `n`. PDF filenames start with that ID and use
+a sanitized row display name, for example `1_GIS Analyst Acme.pdf`.
+
+Each CV is compiled in its own temporary directory with `latexmk -xelatex`.
+`JOB_EVAL_CV_PHOTO_FILE` defaults to `cv/photo.jpg`; when present, it is copied
+into the temp directory before compilation. Compilation errors are written to
+`AI CV PDF` for that row and do not stop the evaluator.
+
+Successful PDFs are uploaded to a new timestamped folder named
+`YYYY-MM-DD_HH-MM-SS` inside a Google Drive parent folder named `JobFinder` by
+default. The same Google service-account credentials are used for Drive.
 
 ## Rejection Row Policy
 
@@ -144,6 +164,7 @@ Large queue pacing activates only when queued rows exceed
 |---|---|
 | Change machine-readable model format | `openai_client.py`, `parsing.py`, tests. |
 | Add output columns | `spreadsheet/schema.py`, `models.py`, `storage.py`, tests, docs. |
+| Change PDF generation or Drive upload | `latex.py`, `pdf_output.py`, `service.py`, tests, docs. |
 | Change cleanup policy | `service.py`, `storage.py`, evaluator storage tests. |
 | Add a storage backend | `storage.py`, `service.py`, CLI source parsing. |
 

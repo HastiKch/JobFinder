@@ -19,6 +19,7 @@ LOGGER = logging.getLogger("jobfinder.pipeline")
 PIPELINE_MODE_SCRAPE_ONLY = "scrape_only"
 PIPELINE_MODE_SCRAPE_AND_EVALUATE = "scrape_and_evaluate"
 DEFAULT_PIPELINE_MODE = PIPELINE_MODE_SCRAPE_AND_EVALUATE
+DEFAULT_STEP_TIMEOUT_SECONDS = 6 * 60 * 60
 PIPELINE_MODE_ALIASES = {
     "scrape": PIPELINE_MODE_SCRAPE_ONLY,
     "scrape_only": PIPELINE_MODE_SCRAPE_ONLY,
@@ -100,10 +101,47 @@ def validate_python_dependencies(pipeline_mode: str) -> None:
         )
 
 
-def run_step(command: list[str], env: dict[str, str], label: str) -> None:
+def parse_step_timeout_seconds(local_env: dict[str, str]) -> int | None:
+    """Return the per-child pipeline timeout, or ``None`` when disabled."""
+    raw_value = setting(
+        local_env,
+        "JOBFINDER_PIPELINE_STEP_TIMEOUT_SECONDS",
+        str(DEFAULT_STEP_TIMEOUT_SECONDS),
+    )
+    try:
+        seconds = int(raw_value)
+    except ValueError as exc:
+        raise SystemExit(
+            "JOBFINDER_PIPELINE_STEP_TIMEOUT_SECONDS must be an integer number "
+            "of seconds."
+        ) from exc
+    return seconds if seconds > 0 else None
+
+
+def run_step(
+    command: list[str],
+    env: dict[str, str],
+    label: str,
+    *,
+    timeout_seconds: int | None,
+) -> None:
     """Run one pipeline child command and stop on non-zero exit."""
     LOGGER.info(label)
-    result = subprocess.run(command, cwd=PROJECT_ROOT, env=env, check=False)
+    try:
+        result = subprocess.run(
+            command,
+            cwd=PROJECT_ROOT,
+            env=env,
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        LOGGER.error(
+            "%s timed out after %ss. Stopping the pipeline.",
+            label,
+            timeout_seconds,
+        )
+        raise SystemExit(124) from exc
     if result.returncode:
         raise SystemExit(result.returncode)
 
@@ -151,6 +189,7 @@ def main() -> int:
     args = build_arg_parser().parse_args()
     local_env = load_local_env()
     pipeline_mode = resolve_pipeline_mode(args, local_env)
+    step_timeout_seconds = parse_step_timeout_seconds(local_env)
     validate_required_settings(local_env, pipeline_mode)
     validate_python_dependencies(pipeline_mode)
 
@@ -203,12 +242,27 @@ def main() -> int:
     ]
 
     if pipeline_mode == PIPELINE_MODE_SCRAPE_ONLY:
-        run_step(scrape_command, env, "Step 1/1: Scraping jobs to Google Sheets")
+        run_step(
+            scrape_command,
+            env,
+            "Step 1/1: Scraping jobs to Google Sheets",
+            timeout_seconds=step_timeout_seconds,
+        )
         LOGGER.info("Scrape-only pipeline complete. Evaluation was skipped.")
         return 0
 
-    run_step(scrape_command, env, "Step 1/2: Scraping jobs to Google Sheets")
-    run_step(evaluate_command, env, "Step 2/2: Evaluating jobs with OpenAI")
+    run_step(
+        scrape_command,
+        env,
+        "Step 1/2: Scraping jobs to Google Sheets",
+        timeout_seconds=step_timeout_seconds,
+    )
+    run_step(
+        evaluate_command,
+        env,
+        "Step 2/2: Evaluating jobs with OpenAI",
+        timeout_seconds=step_timeout_seconds,
+    )
 
     LOGGER.info(
         "Pipeline complete. Your Google Sheet now includes the AI evaluation columns."

@@ -18,11 +18,12 @@ older local commands and to make the package usable before an editable install.
 | `config_files.py` | Loads `configs/keywords.txt` and `configs/filters.json` and provides typed config helpers. |
 | `env.py` | Reads real environment variables with `.env` fallback. Real env values win. |
 | `paths.py` | Central repository-relative file paths. |
-| `google_sheets.py` | Shared Google Sheets auth and A1 sheet-name quoting helpers. |
+| `google_sheets.py` | Shared Google API auth and A1 sheet-name quoting helpers. |
+| `google_drive.py` | Google Drive folder and PDF upload helpers. |
 | `providers/` | Stable provider adapter surface for source-specific actor payloads and normalization. |
 | `scraper/` | Scraper settings, search execution, dedupe handoff, filters, exports, and Google Sheets history. |
 | `dedupe/` | Deterministic cross-provider duplicate detection and canonical merge logic. |
-| `evaluator/` | OpenAI job-fit evaluation, parsing, storage adapters, and final cleanup. |
+| `evaluator/` | OpenAI job-fit evaluation, CV PDF generation, parsing, storage adapters, and final cleanup. |
 | `pipeline/` | One-step scrape/evaluate CLI and preflight checks. |
 | `spreadsheet/` | Canonical spreadsheet column contracts shared by scraper and evaluator. |
 | `operations/` | Sanitized runtime report helpers for CI artifacts. |

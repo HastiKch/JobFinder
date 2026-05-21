@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import re
 import unicodedata
 from datetime import UTC, datetime
@@ -496,9 +497,14 @@ def parse_datetime_value(value: Any) -> datetime | None:
         timestamp = None
 
     if timestamp is not None:
+        if not math.isfinite(timestamp):
+            return None
         if timestamp > 10_000_000_000:
             timestamp = timestamp / 1000
-        return datetime.fromtimestamp(timestamp, UTC)
+        try:
+            return datetime.fromtimestamp(timestamp, UTC)
+        except (OverflowError, OSError, ValueError):
+            return None
 
     text = str(value).strip()
     if not text or text.casefold() in MISSING_VALUES:

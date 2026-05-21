@@ -7,6 +7,7 @@ from jobfinder.evaluator.cli import build_arg_parser, parse_source
 from jobfinder.evaluator.models import EvaluationError
 from jobfinder.evaluator.service import (
     parse_unsuitable_row_policy,
+    resolve_cv_photo_file,
     should_remove_rejected_rows,
 )
 
@@ -56,3 +57,11 @@ def test_parse_unsuitable_row_policy_rejects_unknown_values():
         assert "JOB_EVAL_UNSUITABLE_ROW_POLICY" in str(exc)
     else:
         raise AssertionError("Expected an unsupported unsuitable row policy to fail.")
+
+
+def test_resolve_cv_photo_file_accepts_png_fallback(tmp_path):
+    """The evaluator should find a committed photo.png when photo.jpg is absent."""
+    photo = tmp_path / "photo.png"
+    photo.write_bytes(b"png")
+
+    assert resolve_cv_photo_file(tmp_path / "photo.jpg") == photo

@@ -19,6 +19,10 @@ from jobfinder.evaluator.parsing import (
     extract_job_records,
     read_text_asset,
 )
+from jobfinder.evaluator.pdf_output import (
+    DEFAULT_DRIVE_PARENT_FOLDER_NAME,
+    generate_cv_pdf_outputs,
+)
 from jobfinder.evaluator.storage import (
     build_evaluator_google_sheets_service,
     read_excel_input,
@@ -29,6 +33,7 @@ from jobfinder.evaluator.storage import (
 )
 from jobfinder.paths import (
     DEFAULT_CV_FILE,
+    DEFAULT_CV_PHOTO_FILE,
     DEFAULT_EXCEL_FILE,
     DEFAULT_MASTER_PROMPT_FILE,
 )
@@ -47,6 +52,7 @@ SOURCE_ALIASES = {
 
 UNSUITABLE_ROW_POLICY_SINGLE_LABEL_ONLY = "single_label_only"
 UNSUITABLE_ROW_POLICY_KEEP_ALL = "keep_all"
+MAX_EVALUATOR_CONCURRENCY = 32
 UNSUITABLE_ROW_POLICY_ALIASES = {
     "single_label_only": UNSUITABLE_ROW_POLICY_SINGLE_LABEL_ONLY,
     "single-label-only": UNSUITABLE_ROW_POLICY_SINGLE_LABEL_ONLY,
@@ -83,6 +89,10 @@ class EvaluationOptions:
     retry_max_delay: float
     timeout: float
     max_output_tokens: int
+    cv_pdf_output: bool
+    cv_photo_file: Path
+    cv_pdf_compile_timeout: int
+    cv_drive_parent_folder: str
     large_queue_threshold: int
     large_queue_sleep_ms: int
     save_batch_size: int
@@ -101,6 +111,9 @@ class EvaluationSummary:
     suitable_count: int
     not_suitable_count: int
     error_count: int
+    cv_pdf_count: int = 0
+    cv_pdf_error_count: int = 0
+    cv_pdf_drive_folder: str = ""
 
 
 def options_from_env(
@@ -129,6 +142,15 @@ def options_from_env(
         retry_max_delay=env.get_float("JOB_EVAL_RETRY_MAX_DELAY", 60.0),
         timeout=env.get_float("JOB_EVAL_OPENAI_TIMEOUT", 120.0),
         max_output_tokens=env.get_int("JOB_EVAL_MAX_OUTPUT_TOKENS", 9000),
+        cv_pdf_output=env.get_bool("JOB_EVAL_CV_PDF_OUTPUT", True),
+        cv_photo_file=Path(
+            env.get("JOB_EVAL_CV_PHOTO_FILE", str(DEFAULT_CV_PHOTO_FILE))
+        ),
+        cv_pdf_compile_timeout=env.get_int("JOB_EVAL_CV_PDF_TIMEOUT", 120),
+        cv_drive_parent_folder=env.get(
+            "JOB_EVAL_CV_DRIVE_PARENT_FOLDER",
+            DEFAULT_DRIVE_PARENT_FOLDER_NAME,
+        ),
         large_queue_threshold=env.get_int("JOB_EVAL_LARGE_QUEUE_THRESHOLD", 200),
         large_queue_sleep_ms=env.get_int("JOB_EVAL_LARGE_QUEUE_SLEEP_MS", 2000),
         save_batch_size=max(1, env.get_int("JOB_EVAL_SAVE_BATCH_SIZE", 1)),
@@ -176,16 +198,44 @@ def validate_runtime_settings(options: EvaluationOptions) -> None:
         raise EvaluationError("JOB_EVAL_BATCH_SIZE must be 1 or greater.")
     if options.concurrency < 1:
         raise EvaluationError("JOB_EVAL_CONCURRENCY must be 1 or greater.")
+    if options.concurrency > MAX_EVALUATOR_CONCURRENCY:
+        raise EvaluationError(
+            f"JOB_EVAL_CONCURRENCY must be {MAX_EVALUATOR_CONCURRENCY} or less "
+            "to avoid exhausting API and local worker resources."
+        )
     if options.retries < 0:
         raise EvaluationError("JOB_EVAL_OPENAI_RETRIES must be 0 or greater.")
+    if options.retry_base_delay < 0:
+        raise EvaluationError("JOB_EVAL_RETRY_BASE_DELAY must be 0 or greater.")
+    if options.retry_max_delay < 0:
+        raise EvaluationError("JOB_EVAL_RETRY_MAX_DELAY must be 0 or greater.")
+    if options.timeout <= 0:
+        raise EvaluationError("JOB_EVAL_OPENAI_TIMEOUT must be greater than 0.")
     if options.max_output_tokens < 500:
         raise EvaluationError(
             "JOB_EVAL_MAX_OUTPUT_TOKENS is too small for reliable parsing."
         )
+    if options.cv_pdf_compile_timeout < 1:
+        raise EvaluationError("JOB_EVAL_CV_PDF_TIMEOUT must be 1 or greater.")
     if options.large_queue_threshold < 0:
         raise EvaluationError("JOB_EVAL_LARGE_QUEUE_THRESHOLD must be 0 or greater.")
     if options.large_queue_sleep_ms < 0:
         raise EvaluationError("JOB_EVAL_LARGE_QUEUE_SLEEP_MS must be 0 or greater.")
+
+
+def resolve_cv_photo_file(configured_path: Path) -> Path | None:
+    """Return an existing CV photo path, accepting common image extensions."""
+    if configured_path.exists():
+        return configured_path
+
+    candidates = [
+        configured_path.with_suffix(suffix)
+        for suffix in (".jpg", ".jpeg", ".png", ".webp")
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def load_input_rows(
@@ -377,6 +427,58 @@ def run_evaluation(options: EvaluationOptions) -> EvaluationSummary:
         "Finalizing output columns after %s saved evaluation(s) ...",
         len(evaluations),
     )
+    cv_pdf_count = 0
+    cv_pdf_error_count = 0
+    cv_pdf_drive_folder = ""
+    if options.cv_pdf_output:
+        LOGGER.info("Compiling generated CVs to PDF and uploading to Google Drive ...")
+        photo_path = resolve_cv_photo_file(options.cv_photo_file)
+        pdf_result = generate_cv_pdf_outputs(
+            records,
+            evaluations,
+            photo_path=photo_path,
+            parent_folder_name=options.cv_drive_parent_folder,
+            timeout_seconds=options.cv_pdf_compile_timeout,
+        )
+        cv_pdf_count = pdf_result.success_count
+        cv_pdf_error_count = pdf_result.error_count
+        cv_pdf_drive_folder = pdf_result.run_folder_link
+        for row_number, value in pdf_result.outputs.items():
+            evaluations[row_number].cv_pdf = value
+        pdf_updates = {
+            row_number: evaluation
+            for row_number, evaluation in evaluations.items()
+            if evaluation.cv_pdf
+        }
+        if pdf_updates:
+            LOGGER.info(
+                "Saving %s CV PDF link/error update(s) ...",
+                len(pdf_updates),
+            )
+            write_outputs(
+                options.excel_file,
+                source,
+                spreadsheet_id,
+                google_service,
+                workbook,
+                worksheet,
+                sheet_name,
+                headers,
+                header_map,
+                pdf_updates,
+                cleanup_columns=False,
+                remove_rejected_rows=remove_rejected_rows,
+            )
+        if pdf_result.run_folder_name:
+            LOGGER.info(
+                "CV PDFs saved: %s uploaded, %s error(s), Drive folder: %s",
+                cv_pdf_count,
+                cv_pdf_error_count,
+                pdf_result.run_folder_name,
+            )
+    else:
+        LOGGER.info("CV PDF output is disabled by JOB_EVAL_CV_PDF_OUTPUT.")
+
     write_outputs(
         options.excel_file,
         source,
@@ -412,10 +514,12 @@ def run_evaluation(options: EvaluationOptions) -> EvaluationSummary:
         1 for evaluation in evaluations.values() if evaluation.verdict == "Error"
     )
     LOGGER.info(
-        "Done. Suitable=%s, Not Suitable=%s, Error=%s",
+        "Done. Suitable=%s, Not Suitable=%s, Error=%s, CV PDFs=%s, CV PDF errors=%s",
         suitable_count,
         not_suitable_count,
         error_count,
+        cv_pdf_count,
+        cv_pdf_error_count,
     )
 
     return EvaluationSummary(
@@ -427,4 +531,7 @@ def run_evaluation(options: EvaluationOptions) -> EvaluationSummary:
         suitable_count=suitable_count,
         not_suitable_count=not_suitable_count,
         error_count=error_count,
+        cv_pdf_count=cv_pdf_count,
+        cv_pdf_error_count=cv_pdf_error_count,
+        cv_pdf_drive_folder=cv_pdf_drive_folder,
     )

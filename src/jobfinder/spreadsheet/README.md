@@ -26,6 +26,7 @@ src/jobfinder/spreadsheet/schema.py
 - `AI Fit Score`
 - `AI Unsuitable Reasons`
 - `AI Tailored CV`
+- `AI CV PDF`
 
 ## Current Scraper Columns
 

@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import UTC
+from types import SimpleNamespace
+
 from jobfinder.scraper.normalize import (
     clean_job_description,
     merge_and_deduplicate,
     parse_applicant_count_value,
+    parse_datetime_value,
 )
 
 
@@ -22,6 +26,13 @@ def test_clean_job_description_removes_html_without_flattening_lists():
     raw = "<p>Hello<br>World</p><ul><li>GIS</li><li>Python</li></ul>"
 
     assert clean_job_description(raw) == "Hello\nWorld\n* GIS\n* Python"
+
+
+def test_parse_datetime_value_ignores_unrepresentable_timestamps():
+    """Bad provider timestamps should not crash scraper filtering or sorting."""
+    settings = SimpleNamespace(posted_tz=UTC)
+
+    assert parse_datetime_value(settings, "1e999") is None
 
 
 def test_merge_and_deduplicate_collects_all_matched_keywords():

@@ -10,6 +10,7 @@ from jobfinder.pipeline.cli import (
     PIPELINE_MODE_SCRAPE_AND_EVALUATE,
     PIPELINE_MODE_SCRAPE_ONLY,
     parse_pipeline_mode,
+    parse_step_timeout_seconds,
     resolve_pipeline_mode,
     validate_required_settings,
 )
@@ -35,6 +36,15 @@ def test_resolve_pipeline_mode_prefers_cli_over_env():
     )
 
     assert mode == PIPELINE_MODE_SCRAPE_ONLY
+
+
+def test_parse_step_timeout_accepts_disabled_and_default_values():
+    """Pipeline subprocesses should have a bounded default with explicit opt-out."""
+    assert parse_step_timeout_seconds({}) == 21600
+    assert (
+        parse_step_timeout_seconds({"JOBFINDER_PIPELINE_STEP_TIMEOUT_SECONDS": "0"})
+        is None
+    )
 
 
 def test_scrape_only_requires_apify_but_not_openai(monkeypatch):

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import openpyxl
+from openpyxl.utils import get_column_letter
 
 from jobfinder.evaluator.models import JobEvaluation
 from jobfinder.evaluator.parsing import ensure_output_columns
@@ -316,6 +317,41 @@ def test_final_google_cleanup_removes_multi_label_not_suitable_rows():
         "endIndex": 3,
     }
     assert column_range["dimension"] == "COLUMNS"
+
+
+def test_write_google_output_updates_cv_pdf_column():
+    """The final PDF column should receive the generated Drive link."""
+    headers, header_map = ensure_output_columns(["Job Title", "Job Description"])
+    service = FakeGoogleService([headers])
+    drive_link = "https://drive.google.com/file/d/pdf-id/view"
+    pdf_column = headers.index("AI CV PDF") + 1
+    pdf_letter = get_column_letter(pdf_column)
+
+    write_google_output(
+        service,
+        "spreadsheet-id",
+        "Run",
+        headers,
+        header_map,
+        {
+            2: JobEvaluation(
+                row_number=2,
+                verdict="Suitable",
+                fit_score=90,
+                reason="Strong match.",
+                tailored_cv=r"\documentclass{article}\begin{document}\end{document}",
+                cv_pdf=drive_link,
+                model="test-model",
+            )
+        },
+        cleanup_columns=False,
+    )
+
+    data = service.value_updates[0][1]["data"]
+    assert {
+        "range": f"'Run'!{pdf_letter}2",
+        "values": [[drive_link]],
+    } in data
 
 
 def test_final_google_cleanup_can_keep_all_not_suitable_rows():

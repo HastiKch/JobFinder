@@ -119,6 +119,7 @@ def export_to_excel(
         "AI Fit Score": 14,
         "AI Unsuitable Reasons": 60,
         "AI Tailored CV": 60,
+        "AI CV PDF": 60,
     }
     for col_idx, header in enumerate(HEADER, start=1):
         ws.column_dimensions[get_column_letter(col_idx)].width = width_by_header.get(

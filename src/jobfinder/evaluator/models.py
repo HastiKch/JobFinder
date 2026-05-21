@@ -75,6 +75,7 @@ class JobEvaluation:
     unsuitable_reasons: str = ""
     raw_verdict: str = ""
     tailored_cv: str = ""
+    cv_pdf: str = ""
     evaluated_at: str = ""
     model: str = ""
     error: str = ""
@@ -105,6 +106,7 @@ class JobEvaluation:
             "AI Reason": self.reason,
             "AI Raw Verdict": self.raw_verdict,
             "AI Tailored CV": self.tailored_cv,
+            "AI CV PDF": self.cv_pdf,
             "AI Evaluated At": self.evaluated_at,
             "AI Model": self.model,
             "AI Error": self.error,

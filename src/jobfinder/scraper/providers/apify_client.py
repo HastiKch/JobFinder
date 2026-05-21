@@ -138,7 +138,13 @@ def apify_error_message(response: requests.Response) -> str:
 
 def apify_response_data(response: requests.Response) -> Any:
     """Return the Apify response payload, unwrapping the common data envelope."""
-    data = response.json()
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise ApifyTransientError(
+            f"Apify returned a non-JSON response for HTTP {response.status_code}: "
+            f"{response.text.strip()[:500] or response.reason}"
+        ) from exc
     if isinstance(data, dict) and "data" in data:
         return data["data"]
     return data
@@ -326,7 +332,13 @@ def fetch_dataset_items(
     )
     check_apify_response(response, actor_id, token)
 
-    data = response.json()
+    try:
+        data = response.json()
+    except ValueError as exc:
+        raise ApifyTransientError(
+            f"Apify dataset {dataset_id} returned a non-JSON response: "
+            f"{response.text.strip()[:500] or response.reason}"
+        ) from exc
     if isinstance(data, list):
         return data
     if isinstance(data, dict) and "items" in data:
@@ -380,8 +392,10 @@ def run_actor(
 
 def retry_delay_seconds(settings: ScraperSettings, attempt: int) -> int:
     """Return the backoff delay before retrying a transient Apify issue."""
+    if settings.apify_retry_delay_seconds <= 0:
+        return 0
     return min(
-        settings.apify_retry_delay_seconds * attempt,
+        settings.apify_retry_delay_seconds * (2 ** max(0, attempt - 1)),
         MAX_APIFY_RETRY_DELAY_SECONDS,
     )
 

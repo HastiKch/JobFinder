@@ -14,14 +14,15 @@ Checks:
 
 1. Checkout.
 2. Set up Python 3.14 with pip cache.
-3. Install `requirements-dev.txt`.
-4. Run Ruff lint.
-5. Run Ruff formatting check.
-6. Run mypy on `src`.
-7. Compile Python files.
-8. Smoke-test CLI help with `PYTHONPATH=src`.
-9. Validate `configs/filters.json`.
-10. Run `pytest`.
+3. Install LaTeX tools for PDF-generation coverage.
+4. Install `requirements-dev.txt`.
+5. Run Ruff lint.
+6. Run Ruff formatting check.
+7. Run mypy on `src`.
+8. Compile Python files.
+9. Smoke-test CLI help with `PYTHONPATH=src`.
+10. Validate `configs/filters.json`.
+11. Run `pytest`.
 
 This workflow does not require Apify, Google, or OpenAI secrets. Tests use fakes
 and monkeypatching for external services.
@@ -50,15 +51,16 @@ Manual inputs:
 ```mermaid
 flowchart TD
     A["checkout"] --> B["setup Python 3.14"]
-    B --> C["install requirements.txt"]
-    C --> D["validate required secrets"]
-    D --> E["write private keyword/prompt/CV files"]
-    E --> F["write Google service account and spreadsheet ID"]
-    F --> G["preflight provider and sheet access"]
-    G --> H["run selected pipeline"]
-    H --> I["write workflow summary"]
-    I --> J["upload report artifacts"]
-    J --> K["remove private runtime files"]
+    B --> C["install LaTeX tools"]
+    C --> D["install requirements.txt"]
+    D --> E["validate required secrets"]
+    E --> F["write private keyword/prompt/CV/photo files"]
+    F --> G["write Google service account and spreadsheet ID"]
+    G --> H["preflight provider and sheet access"]
+    H --> I["run selected pipeline"]
+    I --> J["write workflow summary"]
+    J --> K["upload report artifacts"]
+    K --> L["remove private runtime files"]
 ```
 
 The workflow sets `JOBSCRAPER_OUTPUT_MODE=google_sheets` and writes private
@@ -71,10 +73,12 @@ runtime files from secrets. Cleanup removes those files in an `always()` step.
 | `APIFY_API_TOKEN` | Always | One Apify token or up to 12 semicolon-separated tokens. |
 | `GOOGLE_SPREADSHEET_ID` | Always | Target spreadsheet ID. |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Always | Full service-account JSON key. |
+| `GOOGLE_DRIVE_TOKEN_JSON` | Personal Drive PDF uploads | Authorized-user OAuth token JSON. |
 | `JOB_KEYWORDS_TEXT` | Always | Contents of private `configs/keywords.txt`. |
 | `OPENAI_API_KEY` | `scrape_and_evaluate` | OpenAI API key. |
 | `MASTER_PROMPT_TEXT` | `scrape_and_evaluate` | Contents of private evaluator prompt. |
 | `MASTER_CV_TEX` | `scrape_and_evaluate` | Contents of private LaTeX CV. |
+| `CV_PHOTO_BASE64` | Optional | Base64-encoded private CV photo for LaTeX PDF generation. |
 
 ## Report Artifacts
 

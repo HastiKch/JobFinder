@@ -455,6 +455,8 @@ def run_all_searches(
     failed_sources: dict[str, str] = {}
     skipped_searches: list[str] = []
     search_batches = build_search_batches(settings, searches)
+    if not search_batches:
+        return [], zero_searches, failed_sources, skipped_searches
     max_workers = min(settings.search_concurrency, len(search_batches))
     submitted_count = 0
     in_flight_by_source: dict[str, int] = {}

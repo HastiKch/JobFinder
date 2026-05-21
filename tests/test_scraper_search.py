@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 import requests
 
+from jobfinder.scraper.providers.apify_client import retry_delay_seconds
 from jobfinder.scraper.search import (
     ApifyConfigurationError,
     ApifyRunTimeoutError,
@@ -239,6 +240,23 @@ def test_fetch_jobs_for_search_fails_after_retry_budget(monkeypatch):
                 max_items=500,
             ),
         )
+
+
+def test_retry_delay_uses_exponential_backoff_with_cap():
+    """Transient Apify retries should spread out instead of retrying linearly."""
+    settings = make_settings()
+    settings.apify_retry_delay_seconds = 30
+
+    assert retry_delay_seconds(settings, 1) == 30
+    assert retry_delay_seconds(settings, 2) == 60
+    assert retry_delay_seconds(settings, 5) == 300
+
+
+def test_run_all_searches_accepts_empty_search_list():
+    """Direct service calls should not crash when no searches are supplied."""
+    settings = make_settings()
+
+    assert run_all_searches(settings, []) == ([], [], {}, [])
 
 
 def test_run_actor_rotates_to_next_apify_token_when_credit_is_empty(monkeypatch):
