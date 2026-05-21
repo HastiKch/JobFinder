@@ -281,14 +281,22 @@ jobs:
               try:
                   drive_token = json.loads(drive_token_json)
               except json.JSONDecodeError as exc:
-                  print(f"::error::GOOGLE_DRIVE_TOKEN_JSON is not valid JSON: {exc}")
-                  sys.exit(1)
-              if drive_token.get("type") != "authorized_user":
-                  print("::error::GOOGLE_DRIVE_TOKEN_JSON must be an authorized_user token JSON.")
-                  sys.exit(1)
-              Path("google_token.json").write_text(
-                  drive_token_json, encoding="utf-8"
-              )
+                  print(
+                      "::warning::GOOGLE_DRIVE_TOKEN_JSON is not valid JSON "
+                      f"and will be ignored. Drive uploads will use service-account "
+                      f"credentials if possible. Details: {exc}"
+                  )
+              else:
+                  if drive_token.get("type") == "authorized_user":
+                      Path("google_token.json").write_text(
+                          drive_token_json, encoding="utf-8"
+                      )
+                  else:
+                      print(
+                          "::warning::GOOGLE_DRIVE_TOKEN_JSON is not an "
+                          "authorized_user token JSON and will be ignored. Drive "
+                          "uploads will use service-account credentials if possible."
+                      )
 
           if spreadsheet_id:
               Path("google_spreadsheet_id.txt").write_text(spreadsheet_id, encoding="utf-8")

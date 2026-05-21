@@ -73,7 +73,7 @@ runtime files from secrets. Cleanup removes those files in an `always()` step.
 | `APIFY_API_TOKEN` | Always | One Apify token or up to 12 semicolon-separated tokens. |
 | `GOOGLE_SPREADSHEET_ID` | Always | Target spreadsheet ID. |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | Always | Full service-account JSON key. |
-| `GOOGLE_DRIVE_TOKEN_JSON` | Personal Drive PDF uploads | Authorized-user OAuth token JSON. |
+| `GOOGLE_DRIVE_TOKEN_JSON` | Personal Drive PDF uploads | Authorized-user OAuth token JSON; invalid or different JSON is ignored so the workflow can fall back to service-account Drive credentials. |
 | `JOB_KEYWORDS_TEXT` | Always | Contents of private `configs/keywords.txt`. |
 | `OPENAI_API_KEY` | `scrape_and_evaluate` | OpenAI API key. |
 | `MASTER_PROMPT_TEXT` | `scrape_and_evaluate` | Contents of private evaluator prompt. |

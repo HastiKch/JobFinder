@@ -151,6 +151,10 @@ storage quota.
    GOOGLE_DRIVE_TOKEN_JSON
    ```
 
+If `GOOGLE_DRIVE_TOKEN_JSON` is missing or is not an authorized-user token, the
+workflow falls back to service-account Drive credentials and continues with a
+warning.
+
 ## 4. Prepare Private Content
 
 The workflow writes private files from GitHub secrets at runtime. Prepare these
@@ -209,7 +213,7 @@ Add these secrets exactly:
 | `OPENAI_API_KEY` | `scrape_and_evaluate` | Your OpenAI API key, for example `sk-...` or `sk-proj-...`. |
 | `GOOGLE_SPREADSHEET_ID` | All runs | The spreadsheet ID from the Google Sheet URL. |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | All runs | The full contents of the service-account JSON key. |
-| `GOOGLE_DRIVE_TOKEN_JSON` | Personal Drive PDF uploads | The full contents of `google_token.json`. |
+| `GOOGLE_DRIVE_TOKEN_JSON` | Personal Drive PDF uploads | The full contents of `google_token.json`; if absent or not an authorized-user token, the workflow falls back to service-account Drive credentials. |
 | `JOB_KEYWORDS_TEXT` | All runs | The full contents of `configs/keywords.txt`. |
 | `MASTER_PROMPT_TEXT` | `scrape_and_evaluate` | The full contents of `prompts/master_prompt.txt`. |
 | `MASTER_CV_TEX` | `scrape_and_evaluate` | The full contents of `cv/master_cv.tex`. |
@@ -378,7 +382,8 @@ Use GitHub secrets for private values:
 | `Missing repository secret ...` | Add the named secret under GitHub repo settings. |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` error | Copy the full service-account JSON key, not an OAuth client JSON. |
 | Google authentication fails | Confirm the spreadsheet is shared with the service-account `client_email` as Editor. |
-| Drive PDF links fail | Enable Google Drive API. For personal Drive, add `GOOGLE_DRIVE_TOKEN_JSON`; service-account-only uploads can fail with storage quota errors. |
+| `GOOGLE_DRIVE_TOKEN_JSON` warning | The secret is not the authorized-user OAuth token from `google_token.json`; replace it for personal Drive uploads, or leave it unset to use service-account Drive fallback. |
+| Drive PDF links fail | Enable Google Drive API. For personal Drive, add a valid `GOOGLE_DRIVE_TOKEN_JSON`; service-account-only uploads can fail with storage quota errors. |
 | `LaTeX compilation failed` in `AI CV PDF` | Check that `latexmk`/`xelatex` installed, the generated LaTeX is valid, and any referenced photo is available through committed `cv/photo.jpg` or `CV_PHOTO_BASE64`. |
 | Spreadsheet not found | Check that `GOOGLE_SPREADSHEET_ID` is only the ID, not the full URL. |
 | Workflow cannot push or fetch repo | Check GitHub authentication and repository permissions. |
