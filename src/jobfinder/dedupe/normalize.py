@@ -20,6 +20,7 @@ from urllib.parse import (
 from jobfinder.dedupe.models import NormalizedJob, Provenance, SalaryRange
 
 DATETIME_PARSE_ERRORS = (TypeError, ValueError)
+TIMESTAMP_PARSE_ERRORS = (OverflowError, OSError, ValueError)
 MISSING_VALUES = {"", "n/a", "na", "none", "null", "open job", "open apply"}
 KNOWN_SOURCE_LABELS = {
     "linkedin": "LinkedIn",
@@ -503,7 +504,7 @@ def parse_datetime_value(value: Any) -> datetime | None:
             timestamp = timestamp / 1000
         try:
             return datetime.fromtimestamp(timestamp, UTC)
-        except (OverflowError, OSError, ValueError):
+        except TIMESTAMP_PARSE_ERRORS:
             return None
 
     text = str(value).strip()

@@ -78,6 +78,7 @@ HTML_BLOCK_END_RE = re.compile(
 HTML_LIST_ITEM_RE = re.compile(r"<\s*li[^>]*>", re.IGNORECASE)
 HTML_TAG_RE = re.compile(r"<[^>]+>")
 DATETIME_PARSE_ERRORS = (TypeError, ValueError)
+TIMESTAMP_PARSE_ERRORS = (OverflowError, OSError, ValueError)
 MAX_CELL_CHARS = 49_000
 
 
@@ -426,7 +427,7 @@ def parse_datetime_value(settings: ScraperSettings, value: Any) -> datetime | No
             timestamp = timestamp / 1000
         try:
             return datetime.fromtimestamp(timestamp, UTC).astimezone(settings.posted_tz)
-        except (OverflowError, OSError, ValueError):
+        except TIMESTAMP_PARSE_ERRORS:
             return None
 
     text = str(value).strip()
