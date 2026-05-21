@@ -28,7 +28,7 @@ jobfinder-scrape
 | `export_rows.py` | Build common row values for Excel and Google Sheets. |
 | `export_excel.py` | Write and format local `jobs.xlsx` worksheets. |
 | `export_google_sheets.py` | Create timestamped Google Sheet tabs, write values, format columns, and append seen-job keys. |
-| `providers/` | Compatibility provider package plus LinkedIn and Apify implementations. |
+| `providers/` | Compatibility facades for historical provider import paths. New provider code lives in `../providers/`. |
 | `cli.py` | CLI logging, settings validation, and report writing. |
 
 ## Execution Flow
@@ -130,7 +130,7 @@ Excel export:
 
 | Change | Files |
 |---|---|
-| Add provider source | `settings.py`, `search.py`, `../providers/`, tests. |
+| Add provider source | `settings.py`, `../providers/`, `../providers/registry.py`, tests. |
 | Add final filter | `filters.py`, `service.py`, focused tests. |
 | Change historical duplicate identity | `run_history.py`, dedupe tests, run-history tests. |
 | Change spreadsheet columns | `../spreadsheet/schema.py`, `export_rows.py`, evaluator storage/parsing, tests, docs. |

@@ -18,9 +18,10 @@ older local commands and to make the package usable before an editable install.
 | `config_files.py` | Loads `configs/keywords.txt` and `configs/filters.json` and provides typed config helpers. |
 | `env.py` | Reads real environment variables with `.env` fallback. Real env values win. |
 | `paths.py` | Central repository-relative file paths. |
+| `core/` | Shared runtime helpers such as CLI logging setup. |
 | `google_sheets.py` | Shared Google API auth and A1 sheet-name quoting helpers. |
 | `google_drive.py` | Google Drive folder and PDF upload helpers. |
-| `providers/` | Stable provider adapter surface for source-specific actor payloads and normalization. |
+| `providers/` | Stable provider adapter surface, Apify client, provider registry, actor payloads, and actor-output normalization. |
 | `scraper/` | Scraper settings, search execution, dedupe handoff, filters, exports, and Google Sheets history. |
 | `dedupe/` | Deterministic cross-provider duplicate detection and canonical merge logic. |
 | `evaluator/` | OpenAI job-fit evaluation, CV PDF generation, parsing, storage adapters, and final cleanup. |
@@ -53,7 +54,8 @@ The package is intentionally split into services and pure helpers:
   process exit codes, and write optional JSON reports.
 - Service modules orchestrate workflow steps and are easier to test directly.
 - Provider modules translate between JobFinder settings and external actor
-  schemas.
+  schemas. `providers/registry.py` is the adapter table used by scraper
+  orchestration.
 - Storage modules isolate Excel and Google Sheets APIs.
 - `spreadsheet/schema.py` is the shared contract. Scraper and evaluator should
   not invent independent column lists.
@@ -64,7 +66,7 @@ The package is intentionally split into services and pure helpers:
 flowchart TD
     A["env.py + config_files.py"] --> B["ScraperSettings"]
     B --> C["scraper/search.py"]
-    C --> D["providers + Apify"]
+    C --> D["providers/registry.py + Apify"]
     D --> E["dedupe/matching.py"]
     E --> F["scraper filters"]
     F --> G["export_excel.py / export_google_sheets.py"]

@@ -6,6 +6,7 @@ import argparse
 import logging
 import sys
 
+from jobfinder.core.logging import configure_cli_logging
 from jobfinder.operations.reports import write_report_from_env
 from jobfinder.scraper.export_google_sheets import GoogleSheetsExportError
 from jobfinder.scraper.service import (
@@ -44,11 +45,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def configure_logging() -> None:
     """Configure scraper logging for CLI output."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    configure_cli_logging()
 
 
 def main() -> int:

@@ -9,24 +9,24 @@ scraper, dedupe, and exporters.
 
 | Provider | Actor | Main module | Responsibilities |
 |---|---|---|---|
-| LinkedIn | `curious_coder~linkedin-jobs-scraper` | `jobfinder.scraper.providers.linkedin` re-exported by `jobfinder.providers.linkedin` | Build LinkedIn search URLs and actor payloads. |
+| LinkedIn | `curious_coder~linkedin-jobs-scraper` | `jobfinder.providers.linkedin` | Build LinkedIn search URLs and actor payloads. |
 | Indeed | `valig~indeed-jobs-scraper` | `jobfinder.providers.indeed` | Build country/title/location payloads, map date windows to actor day buckets, normalize actor output and metadata. |
 | Stepstone | `memo23~stepstone-search-cheerio-ppr` | `jobfinder.providers.stepstone` | Build keyword/location/category or direct-URL payloads, map date windows to actor day buckets, normalize Stepstone URLs and metadata. |
 
-`jobfinder.providers.apify_client` currently re-exports the low-level Apify
-client implemented in `jobfinder.scraper.providers.apify_client`.
+`jobfinder.providers.apify_client` owns the low-level Apify client. The old
+`jobfinder.scraper.providers.*` paths are compatibility facades.
 
 ## Import Boundary
 
 New provider-specific code should prefer imports from:
 
 ```python
-from jobfinder.providers import indeed, stepstone
+from jobfinder.providers import indeed, linkedin, stepstone
+from jobfinder.providers.registry import provider_adapter
 ```
 
-The `jobfinder.scraper.providers` package still exists for compatibility and for
-the LinkedIn and Apify modules that have not been moved. Tests intentionally
-cover these compatibility paths.
+The scraper uses `ProviderAdapter` registrations from `providers/registry.py`
+instead of hard-coding provider execution details in search orchestration.
 
 ## Adapter Contract
 
@@ -36,6 +36,8 @@ A provider adapter should provide:
 - A function that runs the actor through the shared Apify runner.
 - A normalizer that converts source-specific actor rows into a stable raw job
   dictionary.
+- A `ProviderAdapter` registration when the source should be runnable by the
+  generic scraper workflow.
 
 The normalized raw job should prefer these shared field names where possible:
 
@@ -72,7 +74,7 @@ When adding a provider:
 1. Add provider settings and actor ID in `scraper/settings.py`.
 2. Add source aliases and display name.
 3. Add payload builder and normalizer in this package.
-4. Wire provider execution in `scraper/search.py`.
+4. Register the provider in `providers/registry.py`.
 5. Decide whether failures should be fatal or source-isolated.
 6. Add provider tests for payload construction, output normalization, and URL
    handling.

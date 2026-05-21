@@ -6,6 +6,7 @@ import argparse
 import logging
 import sys
 
+from jobfinder.core.logging import configure_cli_logging
 from jobfinder.env import EnvSettings
 from jobfinder.evaluator.models import (
     EvaluationError,
@@ -70,11 +71,7 @@ def build_arg_parser(env: EnvSettings | None = None) -> argparse.ArgumentParser:
 
 def configure_logging() -> None:
     """Configure evaluator logging for CLI output."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    configure_cli_logging()
 
 
 def main() -> int:

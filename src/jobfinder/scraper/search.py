@@ -11,9 +11,8 @@ from typing import Any
 
 import requests
 
-from jobfinder.providers import indeed, stepstone
-from jobfinder.scraper.providers import linkedin
-from jobfinder.scraper.providers.apify_client import (
+from jobfinder.providers import indeed, linkedin, stepstone
+from jobfinder.providers.apify_client import (
     ApifyAccountUnavailableError,
     ApifyConfigurationError,
     ApifyRunError,
@@ -24,6 +23,7 @@ from jobfinder.scraper.providers.apify_client import (
     retry_delay_seconds,
     run_actor,
 )
+from jobfinder.providers.registry import provider_adapter
 from jobfinder.scraper.settings import (
     SOURCE_ALIASES,
     SOURCE_ORDER,
@@ -136,15 +136,7 @@ def build_actor_input(
     settings: ScraperSettings, source: str, keyword: str
 ) -> dict[str, Any]:
     """Build a source-specific Apify actor payload."""
-    if source == "linkedin":
-        return build_linkedin_actor_input(
-            settings, build_linkedin_search_url(settings, keyword)
-        )
-    if source == "indeed":
-        return build_indeed_actor_input(settings, keyword)
-    if source == "stepstone":
-        return build_stepstone_actor_input(settings, keyword)
-    raise ValueError(f"Unknown job source: {source}")
+    return provider_adapter(source).build_actor_input(settings, keyword)
 
 
 def build_search(settings: ScraperSettings, source: str, keyword: str) -> SearchRequest:
@@ -207,7 +199,7 @@ def build_source_searches(
                 keyword="Configured URLs",
                 display_label=f"{label} / configured URLs",
                 actor_id=settings.source_actor_ids[source],
-                payload=stepstone.build_direct_actor_input(settings),
+                payload=provider_adapter(source).build_direct_input(settings),
                 max_items=settings.source_max_items[source],
             )
         ]
@@ -409,28 +401,12 @@ def run_provider_actor(
     search: SearchRequest,
 ) -> list[dict[str, Any]]:
     """Run a provider search through the correct actor adapter."""
-    if search.source == "indeed":
-        return indeed.run_actor_search(
-            settings,
-            search.actor_id,
-            search.payload,
-            search.max_items,
-            actor_runner=run_actor,
-        )
-    if search.source == "stepstone":
-        return stepstone.run_actor_search(
-            settings,
-            search.actor_id,
-            search.payload,
-            search.max_items,
-            actor_runner=run_actor,
-        )
-
-    return run_actor(
+    return provider_adapter(search.source).run_actor_search(
         settings,
         search.actor_id,
         search.payload,
         search.max_items,
+        run_actor,
     )
 
 

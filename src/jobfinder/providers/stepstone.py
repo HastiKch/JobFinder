@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote, urljoin
 
+from jobfinder.providers import normalization as provider_normalization
 from jobfinder.providers.apify_client import run_actor
 from jobfinder.scraper.settings import ScraperSettings
 
@@ -18,7 +19,6 @@ STEPSTONE_RESULT_RUNNER = Callable[
     [ScraperSettings, str, dict[str, Any], int],
     list[dict[str, Any]],
 ]
-HTML_TAG_RE = re.compile(r"<[^>]+>")
 WHITESPACE_RE = re.compile(r"\s+")
 JOB_TYPE_WORDS = (
     "full-time",
@@ -34,6 +34,7 @@ JOB_TYPE_WORDS = (
 REMOTE_WORDS = ("remote", "home office", "home-office", "work from home")
 HYBRID_WORDS = ("hybrid", "teilweise remote")
 ONSITE_WORDS = ("onsite", "on-site", "vor ort", "praesenz", "präsenz")
+unique = provider_normalization.unique
 
 
 @dataclass(frozen=True)
@@ -253,55 +254,21 @@ def absolute_stepstone_url(value: str) -> str:
 
 def first_text(item: dict[str, Any], *keys: str) -> str:
     """Return the first non-empty scalar value for the given keys."""
-    for key in keys:
-        value = item.get(key)
-        if value is None or isinstance(value, bool | dict | list):
-            continue
-        text = clean_scalar_text(value)
-        if text:
-            return text
-    return ""
+    return provider_normalization.first_text(item, *keys, strip_html=True)
 
 
 def clean_scalar_text(value: Any) -> str:
     """Normalize one scalar output value."""
-    text = HTML_TAG_RE.sub(" ", str(value))
-    return WHITESPACE_RE.sub(" ", text).strip()
+    return provider_normalization.clean_scalar_text(value, strip_html=True)
 
 
 def values_from_shape(value: Any) -> list[str]:
     """Flatten actor dict/list/string metadata shapes into human labels."""
-    if value in (None, "", "N/A") or isinstance(value, bool):
-        return []
-    if isinstance(value, dict):
-        label = value.get("label") or value.get("name") or value.get("value")
-        if label is not None:
-            return values_from_shape(label)
-        return [
-            item
-            for raw_value in value.values()
-            for item in values_from_shape(raw_value)
-        ]
-    if isinstance(value, list):
-        return [item for raw_value in value for item in values_from_shape(raw_value)]
-    text = clean_scalar_text(value)
-    return [text] if text else []
-
-
-def unique(values: list[str], *, limit: int | None = None) -> tuple[str, ...]:
-    """Return unique non-empty values in input order."""
-    seen: set[str] = set()
-    output: list[str] = []
-    for value in values:
-        text = WHITESPACE_RE.sub(" ", value.strip())
-        key = text.casefold()
-        if not text or key in seen:
-            continue
-        seen.add(key)
-        output.append(text)
-        if limit is not None and len(output) >= limit:
-            break
-    return tuple(output)
+    return provider_normalization.values_from_shape(
+        value,
+        strip_html=True,
+        prefer_label_keys=("label", "name", "value"),
+    )
 
 
 def company_details(item: dict[str, Any], company_url: str) -> dict[str, Any]:

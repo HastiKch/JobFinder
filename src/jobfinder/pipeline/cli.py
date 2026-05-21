@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 
+from jobfinder.core.logging import configure_cli_logging
 from jobfinder.env import EnvSettings, load_local_env
 from jobfinder.operations.reports import write_report_from_env
 from jobfinder.paths import ENV_FILE, PROJECT_ROOT
@@ -38,7 +39,7 @@ PIPELINE_MODE_ALIASES = {
 
 def setting(local_env: dict[str, str], name: str, default: str = "") -> str:
     """Read a setting from environment variables with local env fallback."""
-    return os.environ.get(name, local_env.get(name, default)).strip()
+    return EnvSettings(local_env).get(name, default)
 
 
 def parse_pipeline_mode(value: str | None) -> str:
@@ -181,11 +182,7 @@ def child_pythonpath() -> str:
 
 def main() -> int:
     """Run the scraper pipeline in the selected mode."""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(message)s",
-        datefmt="%H:%M:%S",
-    )
+    configure_cli_logging()
     args = build_arg_parser().parse_args()
     local_env = load_local_env()
     pipeline_mode = resolve_pipeline_mode(args, local_env)

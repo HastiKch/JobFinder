@@ -1,1 +1,1 @@
-"""Provider-specific scraper integrations."""
+"""Compatibility facades for historical scraper provider import paths."""

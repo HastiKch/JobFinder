@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from jobfinder.dedupe.matching import deduplicate_search_results
-from jobfinder.scraper.search import indeed_base_url
+from jobfinder.providers.indeed import base_url as indeed_base_url
 from jobfinder.scraper.settings import ScraperSettings
 
 APPLICANT_COUNT_KEYS = (

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
-import os
 from dataclasses import asdict, is_dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from jobfinder.env import EnvSettings
 
 
 def report_payload(status: str, category: str, details: Any) -> dict[str, Any]:
@@ -41,4 +42,4 @@ def write_report_from_env(
     details: Any,
 ) -> None:
     """Write a report to the path named by an environment variable."""
-    write_report(os.environ.get(env_name, ""), status, category, details)
+    write_report(EnvSettings().get(env_name), status, category, details)

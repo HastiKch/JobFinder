@@ -7,6 +7,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
+from jobfinder.env import EnvSettings
 from jobfinder.paths import (
     GOOGLE_CLIENT_SECRET_FILE,
     GOOGLE_SERVICE_ACCOUNT_FILE,
@@ -30,25 +31,20 @@ def write_private_text_file(path: Path, text: str) -> None:
         os.chmod(path, 0o600)
 
 
-def google_api_timeout_seconds() -> int:
+def google_api_timeout_seconds(env: EnvSettings | None = None) -> int:
     """Return the per-request Google API timeout in seconds."""
-    raw_value = os.environ.get(
+    settings = env or EnvSettings()
+    timeout = settings.get_float(
         "GOOGLE_API_TIMEOUT_SECONDS",
-        str(DEFAULT_GOOGLE_API_TIMEOUT_SECONDS),
+        float(DEFAULT_GOOGLE_API_TIMEOUT_SECONDS),
     )
-    try:
-        return max(1, int(float(raw_value)))
-    except ValueError:
-        return DEFAULT_GOOGLE_API_TIMEOUT_SECONDS
+    return max(1, int(timeout))
 
 
-def google_api_retries() -> int:
+def google_api_retries(env: EnvSettings | None = None) -> int:
     """Return the Google client retry count for transient API errors."""
-    raw_value = os.environ.get("GOOGLE_API_RETRIES", str(DEFAULT_GOOGLE_API_RETRIES))
-    try:
-        return max(0, int(raw_value))
-    except ValueError:
-        return DEFAULT_GOOGLE_API_RETRIES
+    settings = env or EnvSettings()
+    return max(0, settings.get_int("GOOGLE_API_RETRIES", DEFAULT_GOOGLE_API_RETRIES))
 
 
 def google_execute(request: Any, *, retries: int | None = None) -> Any:

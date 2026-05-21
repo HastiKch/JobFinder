@@ -10,6 +10,13 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 from jobfinder.providers.apify_client import run_actor
+from jobfinder.providers.normalization import (
+    clean_scalar_text,
+    first_text,
+    nested_text,
+    unique,
+    values_from_shape,
+)
 from jobfinder.scraper.settings import ScraperSettings
 
 INDEED_DOMAIN_BY_COUNTRY = {
@@ -104,7 +111,6 @@ SKILL_WORDS = PROGRAMMING_LANGUAGE_WORDS | {
     "spark",
     "tableau",
 }
-WHITESPACE_RE = re.compile(r"\s+")
 
 
 @dataclass(frozen=True)
@@ -287,72 +293,6 @@ def normalize_actor_item(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def first_text(
-    item: dict[str, Any],
-    *keys: str,
-    fallback: Any = "",
-) -> str:
-    """Return the first non-empty scalar value for the given keys."""
-    for key in keys:
-        value = item.get(key)
-        if value is None:
-            continue
-        if isinstance(value, bool | dict | list):
-            continue
-        text = WHITESPACE_RE.sub(" ", str(value).strip())
-        if text:
-            return text
-
-    if fallback is None or isinstance(fallback, bool | dict | list):
-        return ""
-    return WHITESPACE_RE.sub(" ", str(fallback).strip())
-
-
-def nested_text(item: dict[str, Any], *keys: str) -> str:
-    """Read a nested scalar value."""
-    value: Any = item
-    for key in keys:
-        if not isinstance(value, dict):
-            return ""
-        value = value.get(key)
-    if value is None or isinstance(value, bool | dict | list):
-        return ""
-    return WHITESPACE_RE.sub(" ", str(value).strip())
-
-
-def values_from_shape(value: Any) -> list[str]:
-    """Flatten actor dict/list/string metadata shapes into human labels."""
-    if value in (None, "", "N/A") or isinstance(value, bool):
-        return []
-    if isinstance(value, dict):
-        return [
-            item
-            for raw_value in value.values()
-            for item in values_from_shape(raw_value)
-        ]
-    if isinstance(value, list):
-        return [item for raw_value in value for item in values_from_shape(raw_value)]
-
-    text = WHITESPACE_RE.sub(" ", str(value).strip())
-    return [text] if text else []
-
-
-def unique(values: list[str], *, limit: int | None = None) -> tuple[str, ...]:
-    """Return unique non-empty values in input order."""
-    seen: set[str] = set()
-    output: list[str] = []
-    for value in values:
-        text = WHITESPACE_RE.sub(" ", value.strip())
-        key = text.casefold()
-        if not text or key in seen:
-            continue
-        seen.add(key)
-        output.append(text)
-        if limit is not None and len(output) >= limit:
-            break
-    return tuple(output)
-
-
 def indeed_job_key(item: dict[str, Any]) -> str:
     """Return the most stable Indeed-native job identifier."""
     job_key = first_text(item, "key", "jobKey", "jobId", "job_id", "id")
@@ -410,7 +350,7 @@ def format_location(value: Any) -> str:
         return first_text(value, "streetAddress", "formatted", "name")
     if value is None:
         return ""
-    return WHITESPACE_RE.sub(" ", str(value).strip())
+    return clean_scalar_text(value)
 
 
 def format_job_types(item: dict[str, Any]) -> str:

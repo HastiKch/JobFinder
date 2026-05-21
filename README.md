@@ -69,7 +69,7 @@ flowchart LR
 | Boundary | Main modules | Responsibility |
 |---|---|---|
 | Configuration | `env.py`, `config_files.py`, `scraper/settings.py` | Merge real env, `.env`, `filters.json`, and `keywords.txt` into typed runtime settings. |
-| Provider adapters | `providers/`, `scraper/providers/` | Build actor payloads and normalize source-specific actor output. |
+| Provider adapters | `providers/` | Build actor payloads, normalize source-specific actor output, and register provider adapters. |
 | Scraper orchestration | `scraper/search.py`, `scraper/service.py` | Build searches, run Apify concurrently, handle retries, and produce raw job groups. |
 | Dedupe | `dedupe/` | Convert raw jobs into normalized features, match duplicate clusters, and merge canonical jobs. |
 | Export | `scraper/export_excel.py`, `scraper/export_google_sheets.py` | Write stable spreadsheet rows and formatting. |
@@ -104,8 +104,9 @@ Current Apify actors:
 | Stepstone | `memo23~stepstone-search-cheerio-ppr` | Builds keyword/location/category payloads or a single direct-URL payload. Normalizes relative URLs, salary, work mode, labels, skills, category, and company metadata. |
 
 `src/jobfinder/providers` contains the stable provider adapter surface for new
-code. `src/jobfinder/scraper/providers` keeps compatibility imports and still
-owns the LinkedIn payload builder and low-level Apify client.
+code, including the provider registry and low-level Apify client.
+`src/jobfinder/scraper/providers` keeps compatibility imports for older local
+code.
 
 ### Scraping Flow
 
@@ -696,6 +697,7 @@ JobFinder/
 │   ├── run_pipeline.py
 │   └── scrape_jobs.py
 ├── src/jobfinder/
+│   ├── core/
 │   ├── dedupe/
 │   ├── evaluator/
 │   ├── operations/
