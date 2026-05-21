@@ -22,6 +22,9 @@ from jobfinder.scraper.normalize import (
     get_source_label,
     get_title,
 )
+from jobfinder.scraper.normalize import (
+    parse_datetime_value as parse_scraper_datetime_value,
+)
 from jobfinder.scraper.settings import (
     POSTED_TIME_WINDOW_BACKFILL,
     POSTED_TIME_WINDOW_LAST_7D,
@@ -51,6 +54,7 @@ HISTORICAL_IDENTITY_HEADERS = (
     "Posted",
     "Apply URL",
 )
+POSTED_HEADER_ALIASES = ("Posted", "Posted Date", "Date Posted")
 SEEN_JOBS_SHEET_NAME = "_jobfinder_seen_jobs"
 SEEN_JOBS_HEADER = ["Job Key"]
 
@@ -62,6 +66,8 @@ class GoogleSpreadsheetContext:
     spreadsheet_id: str
     spreadsheet_url: str
     sheet_names: list[str]
+    # Lower bound for since_previous_run. Prefer the newest historical Posted
+    # value; fall back to timestamped run-tab names for older sheets.
     previous_run_started_at: datetime | None
     historical_job_keys: set[str]
 
@@ -95,11 +101,83 @@ def find_previous_run_started_at(
     return max(previous_runs) if previous_runs else None
 
 
+def find_posted_header_index(headers: list[Any]) -> int | None:
+    """Return the zero-based index for the historical posted-date column."""
+    normalized_headers = {
+        normalize_header(header): idx for idx, header in enumerate(headers)
+    }
+    for alias in POSTED_HEADER_ALIASES:
+        idx = normalized_headers.get(normalize_header(alias))
+        if idx is not None:
+            return idx
+    return None
+
+
+def read_latest_google_posted_at(
+    settings: ScraperSettings,
+    service: Any,
+    spreadsheet_id: str,
+    sheet_names: list[str],
+) -> datetime | None:
+    """Return the newest parseable Posted value from historical Google tabs."""
+    header_ranges = [
+        f"{quote_sheet_name(sheet_name)}!1:1" for sheet_name in sheet_names
+    ]
+    header_responses = batch_get_values(service, spreadsheet_id, header_ranges)
+
+    posted_ranges: list[str] = []
+    for sheet_name, value_range in zip(sheet_names, header_responses, strict=False):
+        values = value_range.get("values", [])
+        headers = values[0] if values else []
+        posted_idx = find_posted_header_index(headers)
+        if posted_idx is None:
+            continue
+        column = a1_column_name(posted_idx + 1)
+        posted_ranges.append(f"{quote_sheet_name(sheet_name)}!{column}2:{column}")
+
+    latest: datetime | None = None
+    current_run_started_at = settings.run_started_at.astimezone(settings.posted_tz)
+    for value_range in batch_get_values(service, spreadsheet_id, posted_ranges):
+        for row in value_range.get("values", []):
+            if not row:
+                continue
+            posted_at = parse_scraper_datetime_value(settings, row[0])
+            if not posted_at or posted_at > current_run_started_at:
+                continue
+            if latest is None or posted_at > latest:
+                latest = posted_at
+
+    return latest
+
+
+def resolve_previous_run_started_at(
+    settings: ScraperSettings,
+    service: Any,
+    spreadsheet_id: str,
+    sheet_names: list[str],
+) -> datetime | None:
+    """Resolve the lower-bound anchor for since_previous_run searches."""
+    latest_posted_at = read_latest_google_posted_at(
+        settings,
+        service,
+        spreadsheet_id,
+        sheet_names,
+    )
+    if latest_posted_at is not None:
+        return latest_posted_at
+
+    return find_previous_run_started_at(
+        sheet_names,
+        settings.run_started_at,
+        settings.scraper_tz,
+    )
+
+
 def apply_previous_run_search_window(
     settings: ScraperSettings,
     previous_run_started_at: datetime | None,
 ) -> tuple[ScraperSettings, int | None]:
-    """Use the previous run timestamp to build a broad provider posted window."""
+    """Use the historical lower-bound anchor for the provider posted window."""
     if previous_run_started_at is None:
         return settings, None
 
@@ -145,7 +223,7 @@ def filter_jobs_to_previous_run_window(
     jobs: list[dict[str, Any]],
     previous_run_started_at: datetime | None,
 ) -> tuple[list[dict[str, Any]], int, int]:
-    """Keep jobs posted after the previous run and no later than this run start."""
+    """Keep jobs posted within the historical-anchor/current-run interval."""
     if previous_run_started_at is None:
         return jobs, 0, 0
 
@@ -163,7 +241,7 @@ def filter_jobs_to_previous_run_window(
             continue
 
         posted_at = posted_at.astimezone(settings.posted_tz)
-        if window_start < posted_at <= window_end:
+        if window_start <= posted_at <= window_end:
             kept.append(job)
         else:
             outside_window_count += 1
@@ -619,10 +697,11 @@ def load_google_spreadsheet_context(
         sheet_names = [
             sheet["properties"]["title"] for sheet in spreadsheet.get("sheets", [])
         ]
-        previous_run_started_at = find_previous_run_started_at(
+        previous_run_started_at = resolve_previous_run_started_at(
+            settings,
+            service,
+            spreadsheet_id,
             sheet_names,
-            settings.run_started_at,
-            settings.scraper_tz,
         )
         if seen_jobs_index_exists(sheet_names):
             historical_job_keys = read_seen_jobs_index(service, spreadsheet_id)

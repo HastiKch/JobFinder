@@ -16,6 +16,7 @@ from jobfinder.scraper.run_history import (
     find_previous_run_started_at,
     job_identity_keys_from_values,
     load_google_spreadsheet_context,
+    read_latest_google_posted_at,
     remove_jobs_seen_in_history,
 )
 from jobfinder.scraper.settings import ApifyTokenPool, ScraperSettings
@@ -105,6 +106,44 @@ def test_find_previous_run_started_at_uses_latest_timestamped_sheet():
     assert previous == datetime(2026, 5, 6, 8, 30, tzinfo=berlin)
 
 
+def test_read_latest_google_posted_at_scans_all_posted_columns(monkeypatch):
+    """The lower-bound anchor should come from actual Posted cells across tabs."""
+    berlin = ZoneInfo("Europe/Berlin")
+    settings = make_settings(datetime(2026, 5, 6, 10, 0, tzinfo=berlin))
+
+    def fake_batch_get_values(
+        service,
+        spreadsheet_id,
+        ranges,
+        *,
+        value_render_option="FORMATTED_VALUE",
+    ):
+        if all(range_name.endswith("!1:1") for range_name in ranges):
+            return [
+                {"values": [["Job Title", "Posted"]]},
+                {"values": [["Application Status", "Posted Date"]]},
+                {"values": [["Job Key"]]},
+            ]
+        return [
+            {"values": [["2026-05-05 08:00:00"], ["N/A"]]},
+            {"values": [["2026-05-06 07:15:00"], ["2026-05-07 12:00:00"]]},
+        ]
+
+    monkeypatch.setattr(
+        "jobfinder.scraper.run_history.batch_get_values",
+        fake_batch_get_values,
+    )
+
+    latest = read_latest_google_posted_at(
+        settings,
+        service=object(),
+        spreadsheet_id="spreadsheet-id",
+        sheet_names=["2026-05-05 09-00-00", "All", SEEN_JOBS_SHEET_NAME],
+    )
+
+    assert latest == datetime(2026, 5, 6, 7, 15, tzinfo=berlin)
+
+
 def test_apply_previous_run_search_window_adds_safety_buffer():
     """The Apify search window should cover the exact prior run plus a buffer."""
     berlin = ZoneInfo("Europe/Berlin")
@@ -155,12 +194,13 @@ def test_apply_configured_posted_time_window_can_backfill_without_provider_date(
 
 
 def test_filter_jobs_to_previous_run_window_keeps_exact_interval():
-    """Posted dates are filtered after scraping to the exact run-to-run window."""
+    """Posted dates are filtered after scraping to the exact inclusive window."""
     berlin = ZoneInfo("Europe/Berlin")
     settings = make_settings(datetime(2026, 5, 6, 10, 0, tzinfo=berlin))
     previous = datetime(2026, 5, 5, 9, 0, tzinfo=berlin)
     jobs = [
         {"title": "Old", "postedAt": "2026-05-05T08:59:59+02:00"},
+        {"title": "At lower bound", "postedAt": "2026-05-05T09:00:00+02:00"},
         {"title": "First new", "postedAt": "2026-05-05T09:00:01+02:00"},
         {"title": "At run start", "postedAt": "2026-05-06T10:00:00+02:00"},
         {"title": "Future", "postedAt": "2026-05-06T10:00:01+02:00"},
@@ -173,7 +213,12 @@ def test_filter_jobs_to_previous_run_window_keeps_exact_interval():
         previous,
     )
 
-    assert [job["title"] for job in kept] == ["First new", "At run start", "Unknown"]
+    assert [job["title"] for job in kept] == [
+        "At lower bound",
+        "First new",
+        "At run start",
+        "Unknown",
+    ]
     assert outside_count == 2
     assert unknown_count == 1
 
@@ -309,6 +354,9 @@ def test_load_google_spreadsheet_context_prefers_seen_jobs_index(monkeypatch):
     def fake_read_seen_jobs_index(service, spreadsheet_id):
         return {"profile|linkedin|gis analyst|geoco|berlin"}
 
+    def fake_latest_posted_at(settings, service, spreadsheet_id, sheet_names):
+        return None
+
     def fail_historical_scan(service, spreadsheet_id, sheet_names):
         raise AssertionError("historical tab scan should not run when index exists")
 
@@ -323,6 +371,10 @@ def test_load_google_spreadsheet_context_prefers_seen_jobs_index(monkeypatch):
     monkeypatch.setattr(
         "jobfinder.scraper.run_history.read_seen_jobs_index",
         fake_read_seen_jobs_index,
+    )
+    monkeypatch.setattr(
+        "jobfinder.scraper.run_history.read_latest_google_posted_at",
+        fake_latest_posted_at,
     )
     monkeypatch.setattr(
         "jobfinder.scraper.run_history.read_historical_google_job_keys",
@@ -353,6 +405,9 @@ def test_load_google_spreadsheet_context_seeds_seen_jobs_index(monkeypatch):
     def fake_historical_scan(service, spreadsheet_id, sheet_names):
         return {"profile|linkedin|gis analyst|geoco|berlin"}
 
+    def fake_latest_posted_at(settings, service, spreadsheet_id, sheet_names):
+        return None
+
     def fake_append_seen_job_keys(service, spreadsheet_id, sheet_names, job_keys):
         seeded_keys.append(set(job_keys))
 
@@ -367,6 +422,10 @@ def test_load_google_spreadsheet_context_seeds_seen_jobs_index(monkeypatch):
     monkeypatch.setattr(
         "jobfinder.scraper.run_history.read_historical_google_job_keys",
         fake_historical_scan,
+    )
+    monkeypatch.setattr(
+        "jobfinder.scraper.run_history.read_latest_google_posted_at",
+        fake_latest_posted_at,
     )
     monkeypatch.setattr(
         "jobfinder.scraper.run_history.append_seen_job_keys",
@@ -396,6 +455,9 @@ def test_load_google_spreadsheet_context_can_skip_seen_jobs_seed(monkeypatch):
     def fake_historical_scan(service, spreadsheet_id, sheet_names):
         return {"profile|linkedin|gis analyst|geoco|berlin"}
 
+    def fake_latest_posted_at(settings, service, spreadsheet_id, sheet_names):
+        return None
+
     def fail_append_seen_job_keys(service, spreadsheet_id, sheet_names, job_keys):
         raise AssertionError("preflight should not seed the index")
 
@@ -410,6 +472,10 @@ def test_load_google_spreadsheet_context_can_skip_seen_jobs_seed(monkeypatch):
     monkeypatch.setattr(
         "jobfinder.scraper.run_history.read_historical_google_job_keys",
         fake_historical_scan,
+    )
+    monkeypatch.setattr(
+        "jobfinder.scraper.run_history.read_latest_google_posted_at",
+        fake_latest_posted_at,
     )
     monkeypatch.setattr(
         "jobfinder.scraper.run_history.append_seen_job_keys",

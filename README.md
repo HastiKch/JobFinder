@@ -164,11 +164,12 @@ Merged jobs preserve:
 When Google Sheets output is enabled, `scraper/run_history.py` reads the existing
 spreadsheet before scraping:
 
-- Timestamped tabs named like `2026-05-13 08-17-22` determine the previous run.
+- The newest parseable `Posted` value across existing tabs determines the
+  `since_previous_run` lower bound; timestamped tab names are only a fallback.
 - `_jobfinder_seen_jobs` is a hidden tab containing canonical historical job
   keys.
-- If the hidden index does not exist, the scraper scans previous run tabs and
-  seeds it during a real export.
+- If the hidden index does not exist, the scraper scans previous spreadsheet
+  tabs and seeds it during a real export.
 - Preflight validates access without seeding the hidden index.
 
 Historical duplicate keys are built from spreadsheet identity fields such as
@@ -813,10 +814,11 @@ cleanup, run the relevant focused tests plus the full suite.
   Excel output.
 - Sheet names are timestamped in `JOBSCRAPER_TIMEZONE`; posted dates are
   formatted in `JOBSCRAPER_POSTED_TIMEZONE`.
-- `since_previous_run` is most useful with Google Sheets because previous run
-  timestamps come from existing spreadsheet tabs.
-- Jobs with unparseable posted timestamps are kept during exact previous-run
-  filtering rather than dropped.
+- `since_previous_run` is most useful with Google Sheets because the lower
+  bound comes from the newest historical `Posted` value in existing spreadsheet
+  tabs, including manually maintained tabs such as `All`.
+- Jobs with unparseable posted timestamps are kept during exact historical
+  posted-window filtering rather than dropped.
 - Evaluator saves are incremental. With `JOB_EVAL_SAVE_BATCH_SIZE=1`, completed
   rows survive later failures.
 - Final cleanup removes detail columns after evaluation, so keep raw exports or

@@ -503,7 +503,7 @@ def parse_datetime_value(value: Any) -> datetime | None:
             timestamp = timestamp / 1000
         try:
             return datetime.fromtimestamp(timestamp, UTC)
-        except OverflowError, OSError, ValueError:
+        except (OverflowError, OSError, ValueError):
             return None
 
     text = str(value).strip()

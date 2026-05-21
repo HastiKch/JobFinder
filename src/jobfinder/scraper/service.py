@@ -141,7 +141,7 @@ def run_scrape(settings: ScraperSettings) -> ScrapeResult:
     LOGGER.info("Posted-time window: %s.", settings.posted_time_window)
     if google_context.previous_run_started_at:
         LOGGER.info(
-            "Previous Google Sheets run: %s.",
+            "Previous Google Sheets posted anchor: %s.",
             google_context.previous_run_started_at.strftime("%Y-%m-%d %H:%M:%S %Z"),
         )
     if posted_window_seconds:
@@ -270,7 +270,7 @@ def run_scrape(settings: ScraperSettings) -> ScrapeResult:
         LOGGER.info("Applicant count filter disabled.")
 
     if filter_to_previous_run_window:
-        LOGGER.info("Filtering jobs to the exact previous-run posted window.")
+        LOGGER.info("Filtering jobs to the exact historical posted window.")
         unique_jobs, outside_window_count, unknown_posted_count = (
             filter_jobs_to_previous_run_window(
                 settings,
@@ -279,7 +279,7 @@ def run_scrape(settings: ScraperSettings) -> ScrapeResult:
             )
         )
         LOGGER.info(
-            "Removed %s job(s) outside the previous-run posted window.",
+            "Removed %s job(s) outside the historical posted window.",
             outside_window_count,
         )
         if unknown_posted_count:
@@ -341,7 +341,7 @@ def run_scrape(settings: ScraperSettings) -> ScrapeResult:
     if excluded_applicant_count:
         LOGGER.info("Excluded by applicant count: %s.", excluded_applicant_count)
     if outside_window_count:
-        LOGGER.info("Excluded by previous-run posted window: %s.", outside_window_count)
+        LOGGER.info("Excluded by historical posted window: %s.", outside_window_count)
     if historical_duplicate_count:
         LOGGER.info(
             "Excluded because already present in Google Sheets: %s.",

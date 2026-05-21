@@ -44,7 +44,7 @@ sequenceDiagram
 
     CLI->>Settings: load_scraper_settings()
     CLI->>History: load Google context when output includes Sheets
-    History-->>Settings: previous run timestamp and historical keys
+    History-->>Settings: posted-date anchor and historical keys
     CLI->>Search: build and run provider searches
     Search-->>CLI: keyword/job result groups
     CLI->>Dedupe: deduplicate_search_results()
@@ -97,10 +97,11 @@ Apify rejects for auth, access, or billing reasons.
 ## Historical Windows
 
 `JOBSCRAPER_POSTED_TIME_WINDOW=since_previous_run` depends on Google Sheets
-history. The newest prior timestamped run tab becomes the exact lower bound.
-The provider search window is widened by
-`JOBSCRAPER_SEARCH_WINDOW_BUFFER_SECONDS`, then rows are filtered back to the
-exact previous-run/current-run interval after scraping.
+history. The newest parseable `Posted` value across existing tabs becomes the
+exact lower bound, with timestamped run-tab names used only as a fallback. The
+provider search window is widened by `JOBSCRAPER_SEARCH_WINDOW_BUFFER_SECONDS`,
+then rows are filtered back to the exact historical/current-run posted interval
+after scraping.
 
 Rows with unparseable posted timestamps are kept.
 

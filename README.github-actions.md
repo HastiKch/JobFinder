@@ -233,7 +233,10 @@ Choose the source:
 
 Choose the posted-time window:
 
-- `since_previous_run`: use the current daily behavior. Provider searches cover the time since the previous run where supported, with a safety buffer, and results are narrowed to the exact previous-run interval.
+- `since_previous_run`: use the current daily behavior. Provider searches
+  cover the time since the newest historical `Posted` value in the spreadsheet
+  where supported, with a safety buffer, and results are narrowed to that
+  posted-date interval.
 - `last_24h`: scrape jobs posted in the last 24 hours.
 - `last_7d`: scrape jobs posted in the last 7 days.
 - `backfill`: scrape without a provider posted-time filter.
