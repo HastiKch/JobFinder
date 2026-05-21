@@ -48,6 +48,7 @@ def build_batch_actor_input(
     payload["count"] = settings.max_results_per_search * len(search_urls)
     return payload
 
+
 __all__ = [
     "build_actor_input",
     "build_batch_actor_input",

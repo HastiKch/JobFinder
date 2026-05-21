@@ -426,7 +426,7 @@ def parse_datetime_value(settings: ScraperSettings, value: Any) -> datetime | No
             timestamp = timestamp / 1000
         try:
             return datetime.fromtimestamp(timestamp, UTC).astimezone(settings.posted_tz)
-        except (OverflowError, OSError, ValueError):
+        except OverflowError, OSError, ValueError:
             return None
 
     text = str(value).strip()
