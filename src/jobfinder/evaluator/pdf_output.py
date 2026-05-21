@@ -14,7 +14,7 @@ from typing import Any
 from jobfinder.evaluator.latex import LatexCompilationResult, compile_latex_to_pdf
 from jobfinder.evaluator.models import EvaluationError, JobEvaluation, JobRecord
 from jobfinder.evaluator.parsing import looks_like_latex_cv
-from jobfinder.google_drive import (
+from jobfinder.integrations.google.drive import (
     DriveFolder,
     build_google_drive_service,
     create_drive_folder,
@@ -23,7 +23,7 @@ from jobfinder.google_drive import (
 )
 
 DEFAULT_DRIVE_PARENT_FOLDER_NAME = "JobFinder"
-DEFAULT_CV_PDF_APPLICANT_NAME = "Amir Donyadide"
+DEFAULT_CV_PDF_APPLICANT_NAME = "Applicant"
 ERROR_CELL_LIMIT = 4000
 INVALID_FILENAME_CHARS_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 SAFE_FILENAME_TOKEN_RE = re.compile(r"[^A-Za-z0-9]+")

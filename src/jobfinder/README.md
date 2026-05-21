@@ -19,8 +19,8 @@ older local commands and to make the package usable before an editable install.
 | `env.py` | Reads real environment variables with `.env` fallback. Real env values win. |
 | `paths.py` | Central repository-relative file paths. |
 | `core/` | Shared runtime helpers such as CLI logging setup. |
-| `google_sheets.py` | Shared Google API auth and A1 sheet-name quoting helpers. |
-| `google_drive.py` | Google Drive folder and PDF upload helpers. |
+| `integrations/google/` | Google credential resolution, API client helpers, Sheets, and Drive adapters. |
+| `google_config.py`, `google_auth.py`, `google_sheets.py`, `google_drive.py` | Compatibility facades for existing imports. |
 | `providers/` | Stable provider adapter surface, Apify client, provider registry, actor payloads, and actor-output normalization. |
 | `scraper/` | Scraper settings, search execution, dedupe handoff, filters, exports, and Google Sheets history. |
 | `dedupe/` | Deterministic cross-provider duplicate detection and canonical merge logic. |

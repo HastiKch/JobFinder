@@ -19,8 +19,9 @@ def build_search_url(settings: ScraperSettings, keyword: str) -> str:
         "position": "1",
         "pageNum": "0",
     }
-    if settings.published_at:
-        params["f_TPR"] = settings.published_at
+    posted_window = getattr(settings, "provider_posted_window", settings.published_at)
+    if posted_window:
+        params["f_TPR"] = posted_window
 
     return f"https://www.linkedin.com/jobs/search/?{urlencode(params)}"
 

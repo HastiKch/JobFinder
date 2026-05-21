@@ -79,13 +79,13 @@ jobs:
       MASTER_PROMPT_TEXT: ${{ secrets.MASTER_PROMPT_TEXT }}
       MASTER_CV_TEX: ${{ secrets.MASTER_CV_TEX }}
       CV_PHOTO_BASE64: ${{ secrets.CV_PHOTO_BASE64 }}
-      JOBSCRAPER_OUTPUT_MODE: "google_sheets"
-      JOBSCRAPER_SOURCES: ${{ github.event.inputs.sources || 'all' }}
+      JOBFINDER_SCRAPER_OUTPUT_MODE: "google_sheets"
+      JOBFINDER_SCRAPER_SOURCES: ${{ github.event.inputs.sources || 'all' }}
       JOBFINDER_PIPELINE_MODE: ${{ github.event.inputs.run_mode || 'scrape_and_evaluate' }}
-      JOBSCRAPER_POSTED_TIME_WINDOW: ${{ github.event.inputs.posted_time_window || 'since_previous_run' }}
-      JOBSCRAPER_MAX_APPLICANTS: ${{ github.event.inputs.max_applicants == 'no_limit' && '0' || github.event.inputs.max_applicants || '50' }}
-      JOBSCRAPER_SEARCH_CONCURRENCY: "15"
-      JOBSCRAPER_SEARCH_WINDOW_BUFFER_SECONDS: "3600"
+      JOBFINDER_SCRAPER_POSTED_TIME_WINDOW: ${{ github.event.inputs.posted_time_window || 'since_previous_run' }}
+      JOBFINDER_SCRAPER_MAX_APPLICANTS: ${{ github.event.inputs.max_applicants == 'no_limit' && '0' || github.event.inputs.max_applicants || '50' }}
+      JOBFINDER_SCRAPER_SEARCH_CONCURRENCY: "15"
+      JOBFINDER_SCRAPER_SEARCH_WINDOW_BUFFER_SECONDS: "3600"
       APIFY_RUN_MEMORY_MB: "512"
       APIFY_RUN_TIMEOUT_SECONDS: "3600"
       APIFY_CLIENT_TIMEOUT_SECONDS: "120"
@@ -94,15 +94,15 @@ jobs:
       GOOGLE_API_TIMEOUT_SECONDS: "120"
       GOOGLE_API_RETRIES: "3"
       JOBFINDER_PIPELINE_STEP_TIMEOUT_SECONDS: "21000"
-      JOBSCRAPER_DELAY_BETWEEN_REQUESTS: "0"
-      JOBSCRAPER_SCRAPE_COMPANY_DETAILS: "false"
+      JOBFINDER_SCRAPER_DELAY_BETWEEN_REQUESTS: "0"
+      JOBFINDER_SCRAPER_SCRAPE_COMPANY_DETAILS: "false"
       INDEED_COUNTRY: "DE"
       INDEED_LOCATION: "Germany"
       STEPSTONE_LOCATION: "deutschland"
       STEPSTONE_MAX_CONCURRENCY: "10"
       STEPSTONE_MAX_REQUEST_RETRIES: "3"
-      JOBSCRAPER_TIMEZONE: Europe/Berlin
-      JOBSCRAPER_POSTED_TIMEZONE: Europe/Berlin
+      JOBFINDER_SCRAPER_TIMEZONE: Europe/Berlin
+      JOBFINDER_SCRAPER_POSTED_TIMEZONE: Europe/Berlin
       JOB_EVAL_OPENAI_MODEL: "gpt-5-mini"
       JOB_EVAL_CONCURRENCY: "8"
       JOB_EVAL_BATCH_SIZE: "40"
@@ -335,19 +335,19 @@ jobs:
           mkdir -p reports
 
           echo "Starting JobFinder Pipeline at $(date +'%Y-%m-%dT%H:%M:%S%z') (${TZ})"
-          echo "Output mode: ${JOBSCRAPER_OUTPUT_MODE}"
+          echo "Output mode: ${JOBFINDER_SCRAPER_OUTPUT_MODE}"
           echo "Pipeline mode: ${JOBFINDER_PIPELINE_MODE}"
-          echo "Job sources: ${JOBSCRAPER_SOURCES}"
-          echo "Posted-time window: ${JOBSCRAPER_POSTED_TIME_WINDOW}"
-          if [ "${JOBSCRAPER_MAX_APPLICANTS}" = "0" ]; then
+          echo "Job sources: ${JOBFINDER_SCRAPER_SOURCES}"
+          echo "Posted-time window: ${JOBFINDER_SCRAPER_POSTED_TIME_WINDOW}"
+          if [ "${JOBFINDER_SCRAPER_MAX_APPLICANTS}" = "0" ]; then
             echo "Max applicants/job: no limit"
           else
-            echo "Max applicants/job: ${JOBSCRAPER_MAX_APPLICANTS}"
+            echo "Max applicants/job: ${JOBFINDER_SCRAPER_MAX_APPLICANTS}"
           fi
-          echo "Scraper timezone: ${JOBSCRAPER_TIMEZONE}"
-          echo "Posted timezone: ${JOBSCRAPER_POSTED_TIMEZONE}"
-          echo "Search concurrency: ${JOBSCRAPER_SEARCH_CONCURRENCY}"
-          echo "Search window buffer: ${JOBSCRAPER_SEARCH_WINDOW_BUFFER_SECONDS}s"
+          echo "Scraper timezone: ${JOBFINDER_SCRAPER_TIMEZONE}"
+          echo "Posted timezone: ${JOBFINDER_SCRAPER_POSTED_TIMEZONE}"
+          echo "Search concurrency: ${JOBFINDER_SCRAPER_SEARCH_CONCURRENCY}"
+          echo "Search window buffer: ${JOBFINDER_SCRAPER_SEARCH_WINDOW_BUFFER_SECONDS}s"
           echo "Apify child run memory: ${APIFY_RUN_MEMORY_MB} MB"
           echo "Apify child run timeout: ${APIFY_RUN_TIMEOUT_SECONDS}s"
           echo "Apify HTTP request timeout: ${APIFY_CLIENT_TIMEOUT_SECONDS}s"
@@ -365,9 +365,9 @@ jobs:
             echo
             echo "- Status: $([ "$status" -eq 0 ] && echo succeeded || echo failed)"
             echo "- Pipeline mode: ${JOBFINDER_PIPELINE_MODE}"
-            echo "- Job sources: ${JOBSCRAPER_SOURCES}"
-            echo "- Posted-time window: ${JOBSCRAPER_POSTED_TIME_WINDOW}"
-            echo "- Max applicants/job: $([ "${JOBSCRAPER_MAX_APPLICANTS}" = "0" ] && echo "no limit" || echo "${JOBSCRAPER_MAX_APPLICANTS}")"
+            echo "- Job sources: ${JOBFINDER_SCRAPER_SOURCES}"
+            echo "- Posted-time window: ${JOBFINDER_SCRAPER_POSTED_TIME_WINDOW}"
+            echo "- Max applicants/job: $([ "${JOBFINDER_SCRAPER_MAX_APPLICANTS}" = "0" ] && echo "no limit" || echo "${JOBFINDER_SCRAPER_MAX_APPLICANTS}")"
             echo "- Unsuitable row policy: ${JOB_EVAL_UNSUITABLE_ROW_POLICY}"
             echo "- Started at: $(date +'%Y-%m-%dT%H:%M:%S%z')"
             echo "- GitHub run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"

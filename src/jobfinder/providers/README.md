@@ -59,7 +59,8 @@ descriptions and dedupe without becoming spreadsheet columns accidentally.
 
 ## Date Window Behavior
 
-Scraper settings use LinkedIn-style `published_at` values such as `r86400`.
+Scraper settings expose provider posted-time windows as LinkedIn-style values
+such as `r86400`.
 Adapters map this to each actor's supported filter surface:
 
 - Indeed supports fixed day buckets `1`, `3`, `7`, and `14`.

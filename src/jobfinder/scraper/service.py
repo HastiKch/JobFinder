@@ -26,7 +26,7 @@ from jobfinder.scraper.run_history import (
     load_google_spreadsheet_context,
     remove_jobs_seen_in_history,
 )
-from jobfinder.scraper.search import get_searches, parse_job_sources, run_all_searches
+from jobfinder.scraper.search import get_searches, parse_job_providers, run_all_searches
 from jobfinder.scraper.settings import (
     OUTPUT_MODE_ALIASES,
     ScraperSettings,
@@ -57,6 +57,11 @@ class ScrapeResult:
     outside_window_count: int
     unknown_posted_count: int
     historical_duplicate_count: int
+
+    @property
+    def failed_providers(self) -> dict[str, str]:
+        """Return provider failures keyed by provider name."""
+        return self.failed_sources
 
 
 def parse_output_mode(settings: ScraperSettings) -> set[str]:
@@ -114,8 +119,8 @@ def run_scrape(settings: ScraperSettings) -> ScrapeResult:
         )
     )
 
-    job_sources = parse_job_sources(settings)
-    search_source, searches = get_searches(settings, job_sources)
+    job_providers = parse_job_providers(settings)
+    search_plan_summary, searches = get_searches(settings, job_providers)
     if not searches:
         raise ScraperServiceError(
             "No searches configured. Add keywords to configs/keywords.txt."
@@ -126,15 +131,15 @@ def run_scrape(settings: ScraperSettings) -> ScrapeResult:
         settings.run_started_at.strftime("%Y-%m-%d %H:%M %Z"),
     )
     LOGGER.info(
-        "Sources: %s.", ", ".join(source_label(source) for source in job_sources)
+        "Sources: %s.", ", ".join(source_label(source) for source in job_providers)
     )
-    if "linkedin" in job_sources:
-        LOGGER.info("LinkedIn actor: %s.", settings.source_actor_ids["linkedin"])
-    if "indeed" in job_sources:
-        LOGGER.info("Indeed actor: %s.", settings.source_actor_ids["indeed"])
-    if "stepstone" in job_sources:
-        LOGGER.info("Stepstone actor: %s.", settings.source_actor_ids["stepstone"])
-    LOGGER.info("Search source: %s.", search_source)
+    if "linkedin" in job_providers:
+        LOGGER.info("LinkedIn actor: %s.", settings.provider_actor_ids["linkedin"])
+    if "indeed" in job_providers:
+        LOGGER.info("Indeed actor: %s.", settings.provider_actor_ids["indeed"])
+    if "stepstone" in job_providers:
+        LOGGER.info("Stepstone actor: %s.", settings.provider_actor_ids["stepstone"])
+    LOGGER.info("Search plan: %s.", search_plan_summary)
     LOGGER.info("Output mode: %s.", ", ".join(sorted(output_modes)))
     LOGGER.info("Timezone: %s.", settings.scraper_timezone)
     LOGGER.info("Posted timezone: %s.", settings.posted_timezone)
@@ -175,7 +180,7 @@ def run_scrape(settings: ScraperSettings) -> ScrapeResult:
             "Delay between starting searches: %ss.",
             settings.delay_between_requests,
         )
-    if "linkedin" in job_sources:
+    if "linkedin" in job_providers:
         LOGGER.info("LinkedIn job types: %s.", ", ".join(settings.contract_types))
         LOGGER.info(
             "LinkedIn experience levels: %s.",
@@ -186,7 +191,7 @@ def run_scrape(settings: ScraperSettings) -> ScrapeResult:
             "LinkedIn scrape company details: %s.",
             settings.scrape_company_details,
         )
-    if "indeed" in job_sources:
+    if "indeed" in job_providers:
         LOGGER.info(
             "Indeed country/location: %s / %s.",
             settings.indeed_country.upper(),
@@ -201,7 +206,7 @@ def run_scrape(settings: ScraperSettings) -> ScrapeResult:
             "Indeed save unique only: %s.",
             settings.indeed_save_only_unique_items,
         )
-    if "stepstone" in job_sources:
+    if "stepstone" in job_providers:
         LOGGER.info("Stepstone location: %s.", settings.stepstone_location)
         if settings.stepstone_start_urls:
             LOGGER.info(

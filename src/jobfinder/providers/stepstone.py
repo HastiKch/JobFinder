@@ -15,10 +15,12 @@ from jobfinder.scraper.settings import ScraperSettings
 
 STEPSTONE_BASE_URL = "https://www.stepstone.de"
 STEPSTONE_POSTED_WITHIN_DAYS = (1, 3, 7)
-STEPSTONE_RESULT_RUNNER = Callable[
+StepstoneActorRunner = Callable[
     [ScraperSettings, str, dict[str, Any], int],
     list[dict[str, Any]],
 ]
+STEPSTONE_RESULT_RUNNER = StepstoneActorRunner
+"""Backward-compatible alias for the Stepstone actor runner type."""
 WHITESPACE_RE = re.compile(r"\s+")
 JOB_TYPE_WORDS = (
     "full-time",
@@ -34,7 +36,9 @@ JOB_TYPE_WORDS = (
 REMOTE_WORDS = ("remote", "home office", "home-office", "work from home")
 HYBRID_WORDS = ("hybrid", "teilweise remote")
 ONSITE_WORDS = ("onsite", "on-site", "vor ort", "praesenz", "präsenz")
-unique = provider_normalization.unique
+unique_values = provider_normalization.unique
+unique = unique_values
+"""Backward-compatible alias for the provider normalization helper."""
 
 
 @dataclass(frozen=True)
@@ -128,7 +132,8 @@ class StepstoneMetadata:
 
 def posted_within_filter(settings: ScraperSettings) -> str:
     """Map scraper posted windows to Stepstone's supported age facet."""
-    seconds = seconds_from_published_at(settings.published_at)
+    posted_window = getattr(settings, "provider_posted_window", settings.published_at)
+    seconds = seconds_from_published_at(posted_window)
     if seconds is None:
         return "all"
 
@@ -180,7 +185,7 @@ def run_actor_search(
     payload: dict[str, Any],
     max_items: int,
     *,
-    actor_runner: STEPSTONE_RESULT_RUNNER = run_actor,
+    actor_runner: StepstoneActorRunner = run_actor,
 ) -> list[dict[str, Any]]:
     """Run the Stepstone actor and normalize actor-specific output."""
     items = actor_runner(settings, actor_id, payload, max_items)
@@ -290,7 +295,7 @@ def company_details(item: dict[str, Any], company_url: str) -> dict[str, Any]:
 
 def format_job_type(item: dict[str, Any]) -> str:
     """Return employment/job-type text when Stepstone exposes it."""
-    explicit_values = unique(
+    explicit_values = unique_values(
         [
             *values_from_shape(item.get("employmentType")),
             *values_from_shape(item.get("jobType")),
@@ -309,21 +314,21 @@ def format_job_type(item: dict[str, Any]) -> str:
         ]
     ).casefold()
     matches = [word for word in JOB_TYPE_WORDS if word in text]
-    return ", ".join(unique(matches))
+    return ", ".join(unique_values(matches))
 
 
 def build_metadata(item: dict[str, Any]) -> StepstoneMetadata:
     """Extract richer Stepstone metadata useful to evaluation and future filtering."""
     partnership = item.get("partnership")
     partnership = partnership if isinstance(partnership, dict) else {}
-    labels = unique(
+    labels = unique_values(
         [
             *values_from_shape(item.get("labels")),
             *values_from_shape(item.get("topLabels")),
         ],
         limit=12,
     )
-    skills = unique(values_from_shape(item.get("skills")), limit=16)
+    skills = unique_values(values_from_shape(item.get("skills")), limit=16)
     company_url = absolute_stepstone_url(first_text(item, "companyUrl"))
 
     return StepstoneMetadata(

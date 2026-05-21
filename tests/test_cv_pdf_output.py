@@ -80,7 +80,7 @@ def test_cv_pdf_filename_uses_requested_parts_in_order():
         "Amir Donyadide",
     ) == ("12_CV_Amir_Donyadide_Senior_GIS_Analyst_m_f_Geo_Maps.pdf")
     assert cv_pdf_filename(13, "Développeur C++ / Météo AG") == (
-        "13_CV_Amir_Donyadide_Developpeur_C_Meteo.pdf"
+        "13_CV_Applicant_Developpeur_C_Meteo.pdf"
     )
 
 
@@ -101,8 +101,8 @@ def test_assign_cv_ids_are_row_numbers_for_generated_cvs():
 
     assert [candidate.cv_id for candidate in candidates] == [2, 4]
     assert [candidate.row_number for candidate in candidates] == [2, 4]
-    assert candidates[0].filename == "2_CV_Amir_Donyadide_GIS_Analyst_Acme.pdf"
-    assert candidates[1].filename == "4_CV_Amir_Donyadide_Remote_Sensing_Example.pdf"
+    assert candidates[0].filename == "2_CV_Applicant_GIS_Analyst_Acme.pdf"
+    assert candidates[1].filename == "4_CV_Applicant_Remote_Sensing_Example.pdf"
 
 
 def test_compile_latex_to_pdf_captures_subprocess_failure(tmp_path):
@@ -188,7 +188,7 @@ def test_generate_cv_pdf_outputs_creates_drive_folder_and_links(tmp_path):
     )
 
     assert result.outputs == {
-        2: "https://drive.example/2_CV_Amir_Donyadide_GIS_Analyst_Acme.pdf"
+        2: "https://drive.example/2_CV_Applicant_GIS_Analyst_Acme.pdf"
     }
     assert result.success_count == 1
     assert result.error_count == 0
@@ -197,4 +197,4 @@ def test_generate_cv_pdf_outputs_creates_drive_folder_and_links(tmp_path):
         "2026-05-20_09-08-07",
     ]
     assert uploads[0][1] == "folder-2"
-    assert uploads[0][2] == "2_CV_Amir_Donyadide_GIS_Analyst_Acme.pdf"
+    assert uploads[0][2] == "2_CV_Applicant_GIS_Analyst_Acme.pdf"

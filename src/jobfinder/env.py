@@ -49,9 +49,27 @@ class EnvSettings:
         """Return a string setting with whitespace stripped."""
         return os.environ.get(name, self.local_values.get(name, default)).strip()
 
+    def get_alias(self, name: str, *legacy_names: str, default: str = "") -> str:
+        """Return a setting, checking a canonical name before legacy aliases."""
+        for candidate in (name, *legacy_names):
+            value = self.get(candidate)
+            if value:
+                return value
+        return default.strip()
+
     def get_int(self, name: str, default: int) -> int:
         """Return an integer setting, falling back to the default on bad input."""
         value = self.get(name, str(default))
+        try:
+            return int(value)
+        except ValueError:
+            message = f"Invalid integer for {name}={value!r}; using {default}."
+            (self.logger or logging.getLogger(__name__)).warning(message)
+            return default
+
+    def get_int_alias(self, name: str, *legacy_names: str, default: int) -> int:
+        """Return an integer setting from a canonical name or legacy aliases."""
+        value = self.get_alias(name, *legacy_names, default=str(default))
         try:
             return int(value)
         except ValueError:
@@ -69,9 +87,40 @@ class EnvSettings:
             (self.logger or logging.getLogger(__name__)).warning(message)
             return default
 
+    def get_float_alias(
+        self,
+        name: str,
+        *legacy_names: str,
+        default: float,
+    ) -> float:
+        """Return a float setting from a canonical name or legacy aliases."""
+        value = self.get_alias(name, *legacy_names, default=str(default))
+        try:
+            return float(value)
+        except ValueError:
+            message = f"Invalid float for {name}={value!r}; using {default}."
+            (self.logger or logging.getLogger(__name__)).warning(message)
+            return default
+
     def get_bool(self, name: str, default: bool) -> bool:
         """Return a boolean setting, accepting common true/false strings."""
         value = self.get(name, str(default).lower()).lower()
+        if value in {"1", "true", "yes", "y", "on"}:
+            return True
+        if value in {"0", "false", "no", "n", "off"}:
+            return False
+
+        message = f"Invalid boolean for {name}={value!r}; using {default}."
+        (self.logger or logging.getLogger(__name__)).warning(message)
+        return default
+
+    def get_bool_alias(self, name: str, *legacy_names: str, default: bool) -> bool:
+        """Return a boolean setting from a canonical name or legacy aliases."""
+        value = self.get_alias(
+            name,
+            *legacy_names,
+            default=str(default).lower(),
+        ).lower()
         if value in {"1", "true", "yes", "y", "on"}:
             return True
         if value in {"0", "false", "no", "n", "off"}:

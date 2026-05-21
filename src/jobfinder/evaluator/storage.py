@@ -18,9 +18,9 @@ from jobfinder.evaluator.models import (
     JobEvaluation,
 )
 from jobfinder.evaluator.parsing import normalize_header, trim_trailing_blank_headers
-from jobfinder.google_sheets import (
+from jobfinder.integrations.google.client import google_execute
+from jobfinder.integrations.google.sheets import (
     build_google_sheets_service,
-    google_execute,
     quote_sheet_name,
 )
 from jobfinder.paths import GOOGLE_SPREADSHEET_ID_FILE

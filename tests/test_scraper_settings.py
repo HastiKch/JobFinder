@@ -61,7 +61,32 @@ def test_load_scraper_settings_clamps_provider_payload_limits(monkeypatch):
     assert settings.stepstone_max_concurrency == 1
     assert settings.search_concurrency == 2
     assert settings.apify_batch_size == 3
-    assert settings.source_max_items == {"linkedin": 1, "indeed": 1, "stepstone": 1}
+    assert settings.provider_max_items == {"linkedin": 1, "indeed": 1, "stepstone": 1}
+
+
+def test_load_scraper_settings_reads_canonical_scraper_env_aliases(monkeypatch):
+    """Canonical JOBFINDER_SCRAPER names should work alongside legacy names."""
+    monkeypatch.setattr("jobfinder.scraper.settings.load_filter_config", lambda _: {})
+    monkeypatch.setattr("jobfinder.scraper.settings.load_keywords", lambda _: ["GIS"])
+
+    settings = load_scraper_settings(
+        EnvSettings(
+            {
+                "APIFY_API_TOKEN": "apify_api_real_token",
+                "JOBFINDER_SCRAPER_SOURCES": "all",
+                "JOBFINDER_SCRAPER_OUTPUT_MODE": "both",
+                "JOBFINDER_SCRAPER_MAX_RESULTS_PER_SEARCH": "25",
+                "JOBFINDER_SCRAPER_SEARCH_CONCURRENCY": "2",
+                "JOBFINDER_SCRAPER_POSTED_TIME_WINDOW": "last_7d",
+            }
+        )
+    )
+
+    assert settings.provider_selection == "all"
+    assert settings.output_mode == "both"
+    assert settings.max_results_per_search == 25
+    assert settings.search_concurrency == 2
+    assert settings.posted_time_window == "last_7d"
 
 
 def test_load_scraper_settings_reads_semicolon_separated_apify_tokens(monkeypatch):
@@ -109,9 +134,9 @@ def test_load_scraper_settings_uses_new_indeed_actor_and_limit(monkeypatch):
         )
     )
 
-    assert settings.source_actor_ids["indeed"] == "valig~indeed-jobs-scraper"
+    assert settings.provider_actor_ids["indeed"] == "valig~indeed-jobs-scraper"
     assert settings.indeed_max_results_per_search == 1000
-    assert settings.source_max_items["indeed"] == 1000
+    assert settings.provider_max_items["indeed"] == 1000
 
 
 def test_load_scraper_settings_reads_stepstone_defaults_and_overrides(monkeypatch):
@@ -135,7 +160,7 @@ def test_load_scraper_settings_reads_stepstone_defaults_and_overrides(monkeypatc
         )
     )
 
-    assert settings.source_actor_ids["stepstone"] == (
+    assert settings.provider_actor_ids["stepstone"] == (
         "memo23~stepstone-search-cheerio-ppr"
     )
     assert settings.stepstone_location == "berlin"
@@ -145,4 +170,4 @@ def test_load_scraper_settings_reads_stepstone_defaults_and_overrides(monkeypatc
         "https://www.stepstone.de/work/data/in-berlin",
     ]
     assert settings.stepstone_max_concurrency == 4
-    assert settings.source_max_items["stepstone"] == 500
+    assert settings.provider_max_items["stepstone"] == 500

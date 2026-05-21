@@ -224,6 +224,7 @@ def main() -> int:
     for key, value in local_env.items():
         env.setdefault(key, value)
     env["PYTHONPATH"] = child_pythonpath()
+    env["JOBFINDER_SCRAPER_OUTPUT_MODE"] = "google_sheets"
     env["JOBSCRAPER_OUTPUT_MODE"] = "google_sheets"
     env["JOBFINDER_PIPELINE_MODE"] = pipeline_mode
 

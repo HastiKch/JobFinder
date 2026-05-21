@@ -50,7 +50,9 @@ __all__ = [
     "fetch_jobs_for_search",
     "get_searches",
     "indeed_base_url",
+    "parse_job_providers",
     "parse_job_sources",
+    "provider_concurrency_limit",
     "run_actor",
     "run_all_searches",
 ]
@@ -60,17 +62,53 @@ class SearchExecutionError(RuntimeError):
     """Raised when one keyword search cannot be completed."""
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class SearchRequest:
     """A single source/keyword search to run through Apify."""
 
-    source: str
-    source_label: str
+    provider: str
+    provider_label: str
     keyword: str
     display_label: str
     actor_id: str
     payload: dict[str, Any]
     max_items: int
+
+    def __init__(
+        self,
+        *,
+        provider: str | None = None,
+        provider_label: str | None = None,
+        source: str | None = None,
+        source_label: str | None = None,
+        keyword: str,
+        display_label: str,
+        actor_id: str,
+        payload: dict[str, Any],
+        max_items: int,
+    ) -> None:
+        """Create a provider search request, accepting legacy source keywords."""
+        resolved_provider = provider if provider is not None else source
+        resolved_label = provider_label if provider_label is not None else source_label
+        if resolved_provider is None or resolved_label is None:
+            raise TypeError("SearchRequest requires provider/provider_label.")
+        object.__setattr__(self, "provider", resolved_provider)
+        object.__setattr__(self, "provider_label", resolved_label)
+        object.__setattr__(self, "keyword", keyword)
+        object.__setattr__(self, "display_label", display_label)
+        object.__setattr__(self, "actor_id", actor_id)
+        object.__setattr__(self, "payload", payload)
+        object.__setattr__(self, "max_items", max_items)
+
+    @property
+    def source(self) -> str:
+        """Backward-compatible alias for the provider key."""
+        return self.provider
+
+    @property
+    def source_label(self) -> str:
+        """Backward-compatible alias for the provider display label."""
+        return self.provider_label
 
 
 @dataclass(frozen=True)
@@ -80,14 +118,24 @@ class SearchBatch:
     searches: tuple[tuple[int, SearchRequest], ...]
 
     @property
+    def provider(self) -> str:
+        """Return the shared provider key for the batch."""
+        return self.searches[0][1].provider
+
+    @property
+    def provider_label(self) -> str:
+        """Return the shared provider display label for the batch."""
+        return self.searches[0][1].provider_label
+
+    @property
     def source(self) -> str:
-        """Return the shared source for the batch."""
-        return self.searches[0][1].source
+        """Backward-compatible alias for the batch provider key."""
+        return self.provider
 
     @property
     def source_label(self) -> str:
-        """Return the shared display source for the batch."""
-        return self.searches[0][1].source_label
+        """Backward-compatible alias for the batch provider display label."""
+        return self.provider_label
 
     @property
     def display_label(self) -> str:
@@ -97,7 +145,7 @@ class SearchBatch:
         first_keyword = self.searches[0][1].keyword
         last_keyword = self.searches[-1][1].keyword
         return (
-            f"{self.source_label} batch: {first_keyword} ... {last_keyword} "
+            f"{self.provider_label} batch: {first_keyword} ... {last_keyword} "
             f"({len(self.searches)} searches)"
         )
 
@@ -140,35 +188,44 @@ def build_actor_input(
 
 
 def build_search(settings: ScraperSettings, source: str, keyword: str) -> SearchRequest:
-    """Build a typed search request for one source and keyword."""
+    """Build a typed search request for one provider and keyword."""
     label = source_label(source)
     return SearchRequest(
-        source=source,
-        source_label=label,
+        provider=source,
+        provider_label=label,
         keyword=keyword,
         display_label=f"{label} / {keyword}",
-        actor_id=settings.source_actor_ids[source],
+        actor_id=getattr(settings, "provider_actor_ids", settings.source_actor_ids)[
+            source
+        ],
         payload=build_actor_input(settings, source, keyword),
-        max_items=settings.source_max_items[source],
+        max_items=getattr(settings, "provider_max_items", settings.source_max_items)[
+            source
+        ],
     )
 
 
-def parse_job_sources(settings: ScraperSettings) -> list[str]:
-    """Resolve selected job sources from environment aliases."""
+def parse_job_providers(settings: ScraperSettings) -> list[str]:
+    """Resolve selected job providers from environment aliases."""
     selected: set[str] = set()
-    raw_parts = re.split(r"[\s,]+", settings.source_mode.strip().casefold())
+    provider_selection = getattr(settings, "provider_selection", settings.source_mode)
+    raw_parts = re.split(r"[\s,]+", provider_selection.strip().casefold())
     parts = [part for part in raw_parts if part]
     for part in parts:
         selected.update(SOURCE_ALIASES.get(part, set()))
 
     if not selected:
         LOGGER.warning(
-            "Unknown JOBSCRAPER_SOURCES %r; using LinkedIn only.",
-            settings.source_mode,
+            "Unknown JOBFINDER_SCRAPER_SOURCES %r; using LinkedIn only.",
+            provider_selection,
         )
         selected = {"linkedin"}
 
     return [source for source in SOURCE_ORDER if source in selected]
+
+
+parse_job_sources = parse_job_providers
+"""Backward-compatible alias for provider selection."""
 
 
 def get_searches(
@@ -177,7 +234,12 @@ def get_searches(
     """Build all source/keyword searches for a scraper run."""
     searches = []
     for source in sources:
-        if source not in settings.source_actor_ids:
+        provider_actor_ids = getattr(
+            settings,
+            "provider_actor_ids",
+            settings.source_actor_ids,
+        )
+        if source not in provider_actor_ids:
             continue
         searches.extend(build_source_searches(settings, source))
 
@@ -190,17 +252,26 @@ def build_source_searches(
     source: str,
 ) -> list[SearchRequest]:
     """Build source-specific searches without changing provider internals."""
+    provider_actor_ids = getattr(
+        settings,
+        "provider_actor_ids",
+        settings.source_actor_ids,
+    )
     if source == "stepstone" and settings.stepstone_start_urls:
         label = source_label(source)
         return [
             SearchRequest(
-                source=source,
-                source_label=label,
+                provider=source,
+                provider_label=label,
                 keyword="Configured URLs",
                 display_label=f"{label} / configured URLs",
-                actor_id=settings.source_actor_ids[source],
+                actor_id=provider_actor_ids[source],
                 payload=provider_adapter(source).build_direct_input(settings),
-                max_items=settings.source_max_items[source],
+                max_items=getattr(
+                    settings,
+                    "provider_max_items",
+                    settings.source_max_items,
+                )[source],
             )
         ]
 
@@ -208,10 +279,10 @@ def build_source_searches(
 
 
 def annotate_jobs(
-    jobs: list[dict[str, Any]], source: str, label: str
+    jobs: list[dict[str, Any]], provider: str, label: str
 ) -> list[dict[str, Any]]:
     """Attach source metadata to raw jobs returned by Apify."""
-    return [dict(job, _source=source, _source_label=label) for job in jobs]
+    return [dict(job, _source=provider, _source_label=label) for job in jobs]
 
 
 def search_url(search: SearchRequest) -> str:
@@ -259,7 +330,7 @@ def group_batched_linkedin_jobs(
             return None
         idx, search = url_to_search[matching_urls.pop()]
         grouped[idx].append(
-            dict(job, _source=search.source, _source_label=search.source_label)
+            dict(job, _source=search.provider, _source_label=search.provider_label)
         )
 
     return [(idx, search.keyword, grouped[idx]) for idx, search in batch.searches]
@@ -286,7 +357,7 @@ def build_search_batches(
             pending_linkedin = []
 
     for idx, search in enumerate(searches, start=1):
-        if search.source == "linkedin":
+        if search.provider == "linkedin":
             pending_linkedin.append((idx, search))
             if len(pending_linkedin) >= settings.apify_batch_size:
                 flush_linkedin()
@@ -310,7 +381,7 @@ def fetch_jobs_for_batch(
 
     first_search = batch.searches[0][1]
     search_urls = [search_url(search) for _, search in batch.searches]
-    if first_search.source != "linkedin" or not all(search_urls):
+    if first_search.provider != "linkedin" or not all(search_urls):
         return [
             (idx, search.keyword, fetch_jobs_for_search(settings, search))
             for idx, search in batch.searches
@@ -318,8 +389,8 @@ def fetch_jobs_for_batch(
 
     payload = linkedin.build_batch_actor_input(settings, search_urls)
     batch_search = SearchRequest(
-        source=first_search.source,
-        source_label=first_search.source_label,
+        provider=first_search.provider,
+        provider_label=first_search.provider_label,
         keyword=", ".join(search.keyword for _, search in batch.searches),
         display_label=batch.display_label,
         actor_id=first_search.actor_id,
@@ -356,7 +427,7 @@ def fetch_jobs_for_search(
     for attempt in range(1, total_attempts + 1):
         try:
             jobs = run_provider_actor(settings, search)
-            return annotate_jobs(jobs, search.source, search.source_label)
+            return annotate_jobs(jobs, search.provider, search.provider_label)
         except ApifyConfigurationError:
             raise
         except ApifyRunTimeoutError as exc:
@@ -401,7 +472,7 @@ def run_provider_actor(
     search: SearchRequest,
 ) -> list[dict[str, Any]]:
     """Run a provider search through the correct actor adapter."""
-    return provider_adapter(search.source).run_actor_search(
+    return provider_adapter(search.provider).run_actor_search(
         settings,
         search.actor_id,
         search.payload,
@@ -410,13 +481,17 @@ def run_provider_actor(
     )
 
 
-def source_concurrency_limit(settings: ScraperSettings, source: str) -> int:
-    """Return the source-specific execution limit for actor runs."""
-    if source == "indeed":
+def provider_concurrency_limit(settings: ScraperSettings, provider: str) -> int:
+    """Return the provider-specific execution limit for actor runs."""
+    if provider == "indeed":
         return max(1, settings.indeed_max_concurrency)
-    if source == "stepstone":
+    if provider == "stepstone":
         return max(1, settings.stepstone_max_concurrency)
     return max(1, settings.search_concurrency)
+
+
+source_concurrency_limit = provider_concurrency_limit
+"""Backward-compatible alias for provider concurrency limits."""
 
 
 def run_all_searches(
@@ -452,20 +527,20 @@ def run_all_searches(
         while len(in_flight) < max_workers and next_batch_idx < len(search_batches):
             batch = search_batches[next_batch_idx]
 
-            source_limit = source_concurrency_limit(settings, batch.source)
-            if in_flight_by_source.get(batch.source, 0) >= source_limit:
+            source_limit = provider_concurrency_limit(settings, batch.provider)
+            if in_flight_by_source.get(batch.provider, 0) >= source_limit:
                 return
 
             label = batch.display_label
             next_batch_idx += 1
-            if batch.source in failed_sources:
+            if batch.provider in failed_sources:
                 for idx, search in batch.searches:
                     LOGGER.info(
                         "[%02d/%s] Skipping %s because %s failed earlier in this run.",
                         idx,
                         len(searches),
                         search.display_label,
-                        search.source_label,
+                        search.provider_label,
                     )
                     skipped_searches.append(search.display_label)
                 continue
@@ -482,8 +557,8 @@ def run_all_searches(
             )
             future = executor.submit(fetch_jobs_for_batch, settings, batch)
             in_flight[future] = batch
-            in_flight_by_source[batch.source] = (
-                in_flight_by_source.get(batch.source, 0) + 1
+            in_flight_by_source[batch.provider] = (
+                in_flight_by_source.get(batch.provider, 0) + 1
             )
             submitted_count += 1
 
@@ -494,35 +569,35 @@ def run_all_searches(
         while in_flight:
             for future in as_completed(tuple(in_flight)):
                 batch = in_flight.pop(future)
-                in_flight_by_source[batch.source] = max(
+                in_flight_by_source[batch.provider] = max(
                     0,
-                    in_flight_by_source.get(batch.source, 1) - 1,
+                    in_flight_by_source.get(batch.provider, 1) - 1,
                 )
 
                 try:
                     batch_results = future.result()
                 except ApifyConfigurationError as exc:
-                    if batch.source not in failed_sources:
+                    if batch.provider not in failed_sources:
                         LOGGER.error("%s", exc)
                         LOGGER.warning(
                             "Continuing with other sources. Remaining %s searches "
                             "will be skipped.",
-                            batch.source_label,
+                            batch.provider_label,
                         )
-                        failed_sources[batch.source] = str(exc)
+                        failed_sources[batch.provider] = str(exc)
                     skipped_searches.extend(
                         search.display_label for _, search in batch.searches
                     )
                 except SearchExecutionError as exc:
-                    if batch.source == "stepstone":
-                        if batch.source not in failed_sources:
+                    if batch.provider == "stepstone":
+                        if batch.provider not in failed_sources:
                             LOGGER.error("%s", exc)
                             LOGGER.warning(
                                 "Continuing with other sources. Remaining %s "
                                 "searches will be skipped.",
-                                batch.source_label,
+                                batch.provider_label,
                             )
-                            failed_sources[batch.source] = str(exc)
+                            failed_sources[batch.provider] = str(exc)
                         skipped_searches.extend(
                             search.display_label for _, search in batch.searches
                         )

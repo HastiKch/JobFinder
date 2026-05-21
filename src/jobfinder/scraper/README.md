@@ -55,7 +55,7 @@ sequenceDiagram
 
 ## Output Modes
 
-`JOBSCRAPER_OUTPUT_MODE` resolves through aliases:
+`JOBFINDER_SCRAPER_OUTPUT_MODE` resolves through aliases:
 
 | Value | Output |
 |---|---|
@@ -67,7 +67,7 @@ The pipeline CLI overrides this to `google_sheets`.
 
 ## Source Selection
 
-`JOBSCRAPER_SOURCES` supports `linkedin`, `indeed`, `stepstone`, `both`, `all`,
+`JOBFINDER_SCRAPER_SOURCES` supports `linkedin`, `indeed`, `stepstone`, `both`, `all`,
 and comma-separated source names.
 
 For each selected source:
@@ -82,13 +82,13 @@ For each selected source:
 
 The scraper uses:
 
-- Global concurrency from `JOBSCRAPER_SEARCH_CONCURRENCY`.
+- Global concurrency from `JOBFINDER_SCRAPER_SEARCH_CONCURRENCY`.
 - Source-specific caps from `INDEED_MAX_CONCURRENCY` and
   `STEPSTONE_MAX_CONCURRENCY`.
 - Apify transient retry count from `APIFY_TRANSIENT_ERROR_RETRIES`.
 - Backoff base delay from `APIFY_RETRY_DELAY_SECONDS`.
 - Optional memory-derived concurrency cap from
-  `JOBSCRAPER_APIFY_MEMORY_LIMIT_MB / APIFY_RUN_MEMORY_MB`.
+  `JOBFINDER_SCRAPER_APIFY_MEMORY_LIMIT_MB / APIFY_RUN_MEMORY_MB`.
 
 Multiple Apify tokens can be configured in one `APIFY_API_TOKEN` setting with
 semicolon separators. The token pool is thread-safe and retires tokens that
@@ -96,10 +96,10 @@ Apify rejects for auth, access, or billing reasons.
 
 ## Historical Windows
 
-`JOBSCRAPER_POSTED_TIME_WINDOW=since_previous_run` depends on Google Sheets
+`JOBFINDER_SCRAPER_POSTED_TIME_WINDOW=since_previous_run` depends on Google Sheets
 history. The newest parseable `Posted` value across existing tabs becomes the
 exact lower bound, with timestamped run-tab names used only as a fallback. The
-provider search window is widened by `JOBSCRAPER_SEARCH_WINDOW_BUFFER_SECONDS`,
+provider search window is widened by `JOBFINDER_SCRAPER_SEARCH_WINDOW_BUFFER_SECONDS`,
 then rows are filtered back to the exact historical/current-run posted interval
 after scraping.
 

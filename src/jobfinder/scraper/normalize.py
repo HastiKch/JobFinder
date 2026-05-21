@@ -105,7 +105,7 @@ def sheet_safe(value: Any) -> str:
     return text
 
 
-def field(job: dict[str, Any], *keys: str) -> str:
+def first_spreadsheet_value(job: dict[str, Any], *keys: str) -> str:
     """Return the first non-empty spreadsheet-safe field from a job dict."""
     for key in keys:
         value = job.get(key)
@@ -114,7 +114,7 @@ def field(job: dict[str, Any], *keys: str) -> str:
     return "N/A"
 
 
-def safe(job: dict[str, Any], *keys: str) -> str:
+def first_raw_text(job: dict[str, Any], *keys: str) -> str:
     """Try multiple key names and return the first non-empty raw value."""
     for key in keys:
         value = job.get(key)
@@ -123,7 +123,7 @@ def safe(job: dict[str, Any], *keys: str) -> str:
     return "N/A"
 
 
-def nested(job: dict[str, Any], *keys: str) -> str:
+def nested_spreadsheet_value(job: dict[str, Any], *keys: str) -> str:
     """Read a nested dictionary value and return it in spreadsheet-safe form."""
     value: Any = job
     for key in keys:
@@ -135,7 +135,7 @@ def nested(job: dict[str, Any], *keys: str) -> str:
     return sheet_safe(value)
 
 
-def first_value(*values: str) -> str:
+def first_meaningful_value(*values: str) -> str:
     """Return the first meaningful value from a list of normalized strings."""
     for value in values:
         if value and value != "N/A":
@@ -145,41 +145,64 @@ def first_value(*values: str) -> str:
 
 def get_source_label(job: dict[str, Any]) -> str:
     """Return the display source label for a job."""
-    return safe(job, "_source_label")
+    return first_raw_text(job, "_source_label")
 
 
 def get_title(job: dict[str, Any]) -> str:
     """Return a normalized job title."""
-    return safe(job, "title", "positionName", "jobTitle", "job_title", "name")
+    return first_raw_text(
+        job,
+        "title",
+        "positionName",
+        "jobTitle",
+        "job_title",
+        "name",
+    )
 
 
 def get_company(job: dict[str, Any]) -> str:
     """Return a normalized company name."""
-    company = field(job, "companyName", "company", "organization", "jobSourceName")
-    employer = nested(job, "employer", "name")
+    company = first_spreadsheet_value(
+        job,
+        "companyName",
+        "company",
+        "organization",
+        "jobSourceName",
+    )
+    employer = nested_spreadsheet_value(job, "employer", "name")
     if "companyDetails" not in job:
-        return first_value(employer, company)
-    return first_value(nested(job, "companyDetails", "name"), employer, company)
+        return first_meaningful_value(employer, company)
+    return first_meaningful_value(
+        nested_spreadsheet_value(job, "companyDetails", "name"),
+        employer,
+        company,
+    )
 
 
 def get_location(job: dict[str, Any]) -> str:
     """Return a normalized job location."""
     if isinstance(job.get("location"), dict):
-        return first_value(
-            nested(job, "location", "formatted", "long"),
-            nested(job, "location", "formatted"),
-            nested(job, "location", "fullAddress"),
-            nested(job, "location", "city"),
+        return first_meaningful_value(
+            nested_spreadsheet_value(job, "location", "formatted", "long"),
+            nested_spreadsheet_value(job, "location", "formatted"),
+            nested_spreadsheet_value(job, "location", "fullAddress"),
+            nested_spreadsheet_value(job, "location", "city"),
             ", ".join(
                 part
                 for part in (
-                    nested(job, "location", "admin1Code"),
-                    nested(job, "location", "countryName"),
+                    nested_spreadsheet_value(job, "location", "admin1Code"),
+                    nested_spreadsheet_value(job, "location", "countryName"),
                 )
                 if part != "N/A"
             ),
         )
-    return field(job, "location", "formattedLocation", "jobLocation", "place")
+    return first_spreadsheet_value(
+        job,
+        "location",
+        "formattedLocation",
+        "jobLocation",
+        "place",
+    )
 
 
 def get_job_url(settings: ScraperSettings, job: dict[str, Any]) -> str:
@@ -256,7 +279,7 @@ def get_posted_datetime(
 
 def get_job_type(job: dict[str, Any]) -> str:
     """Return the normalized employment type."""
-    return field(
+    return first_spreadsheet_value(
         job,
         "employmentType",
         "employment_type",
@@ -320,7 +343,7 @@ def clean_job_description(value: Any) -> str:
 
 def get_apply_url(job: dict[str, Any]) -> str:
     """Return the best available application URL."""
-    return field(
+    return first_spreadsheet_value(
         job,
         "applyUrl",
         "apply_url",
@@ -332,7 +355,7 @@ def get_apply_url(job: dict[str, Any]) -> str:
 
 def get_applicants(job: dict[str, Any]) -> str:
     """Return the applicant-count text visible in a raw job."""
-    return field(job, *APPLICANT_COUNT_KEYS)
+    return first_spreadsheet_value(job, *APPLICANT_COUNT_KEYS)
 
 
 def parse_applicant_number(number_text: str, unit: str | None) -> int | None:
@@ -461,7 +484,7 @@ def format_posted_value(settings: ScraperSettings, value: Any) -> str:
     return sheet_safe(value)
 
 
-def make_dedup_key(job: dict[str, Any]) -> str:
+def legacy_provider_job_key(job: dict[str, Any]) -> str:
     """Build a stable deduplication key for a normalized job."""
     source = str(job.get("_source") or "unknown").lower().strip()
     job_id = (
@@ -482,6 +505,13 @@ def make_dedup_key(job: dict[str, Any]) -> str:
     company = get_company(job).lower().strip()
     location = get_location(job).lower().strip()
     return f"{source}|{title}|{company}|{location}"
+
+
+field = first_spreadsheet_value
+safe = first_raw_text
+nested = nested_spreadsheet_value
+first_value = first_meaningful_value
+make_dedup_key = legacy_provider_job_key
 
 
 def merge_and_deduplicate(

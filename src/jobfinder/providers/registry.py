@@ -29,10 +29,17 @@ class ProviderAdapter:
     ]
     build_direct_actor_input: DirectActorInputBuilder | None = None
 
+    @property
+    def provider_key(self) -> str:
+        """Return the canonical provider key."""
+        return self.source
+
     def build_direct_input(self, settings: ScraperSettings) -> dict[str, Any]:
         """Build a direct-URL payload for providers that support it."""
         if self.build_direct_actor_input is None:
-            raise ValueError(f"{self.source} does not support direct actor inputs.")
+            raise ValueError(
+                f"{self.provider_key} does not support direct actor inputs."
+            )
         return self.build_direct_actor_input(settings)
 
 

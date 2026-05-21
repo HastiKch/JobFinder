@@ -20,7 +20,7 @@ while the job is running.
 
 - Fastest feedback while editing keywords, filters, prompts, or CV content.
 - Easy access to full terminal output and local files.
-- Can scrape to a local Excel workbook with `JOBSCRAPER_OUTPUT_MODE=excel`.
+- Can scrape to a local Excel workbook with `JOBFINDER_SCRAPER_OUTPUT_MODE=excel`.
 - Good place to test changes before committing or pushing them.
 
 ## Cons
@@ -126,26 +126,26 @@ Common settings:
 | Setting | Default | Description |
 |---|---:|---|
 | `APIFY_API_TOKEN` | blank | One Apify token, or 1 to 12 tokens separated by `;` for ordered credit fallback. |
-| `JOBSCRAPER_SOURCES` | `linkedin` | Use `linkedin`, `indeed`, `stepstone`, `both`, `all`, or comma-separated source names such as `linkedin,stepstone`. |
-| `JOBSCRAPER_OUTPUT_MODE` | `excel` | Use `excel`, `google_sheets`, or `both`. The full pipeline forces Google Sheets. |
+| `JOBFINDER_SCRAPER_SOURCES` | `linkedin` | Use `linkedin`, `indeed`, `stepstone`, `both`, `all`, or comma-separated source names such as `linkedin,stepstone`. |
+| `JOBFINDER_SCRAPER_OUTPUT_MODE` | `excel` | Use `excel`, `google_sheets`, or `both`. The full pipeline forces Google Sheets. |
 | `JOBFINDER_PIPELINE_MODE` | `scrape_and_evaluate` | For `run_job_pipeline.py`, use `scrape_only` or `scrape_and_evaluate`. |
-| `JOBSCRAPER_SEARCH_CONCURRENCY` | `15` | Number of Apify searches run at the same time. |
-| `JOBSCRAPER_APIFY_MEMORY_LIMIT_MB` | `0` | Optional total Apify memory cap used to reduce search concurrency; `0` disables the cap. |
-| `JOBSCRAPER_APIFY_BATCH_SIZE` | `1` | Optional LinkedIn search batch size. Keep `1` unless actor results expose source search URLs for attribution. |
-| `JOBSCRAPER_MAX_RESULTS_PER_SEARCH` | `500` | Maximum LinkedIn results per keyword. |
-| `JOBSCRAPER_POSTED_TIME_WINDOW` | `since_previous_run` | Use `since_previous_run`, `last_24h`, `last_7d`, or `backfill` to control provider posted-time filters. LinkedIn uses second-based windows; Indeed and Stepstone use the closest supported actor day bucket when possible. |
-| `JOBSCRAPER_SEARCH_WINDOW_BUFFER_SECONDS` | `3600` | Extra search-window padding before exact posted-time filtering, to avoid missing jobs while the run is starting. |
-| `JOBSCRAPER_MAX_APPLICANTS` | `100` | Maximum applicants per job after scraping. Use `0` for no limit. |
+| `JOBFINDER_SCRAPER_SEARCH_CONCURRENCY` | `15` | Number of Apify searches run at the same time. |
+| `JOBFINDER_SCRAPER_APIFY_MEMORY_LIMIT_MB` | `0` | Optional total Apify memory cap used to reduce search concurrency; `0` disables the cap. |
+| `JOBFINDER_SCRAPER_APIFY_BATCH_SIZE` | `1` | Optional LinkedIn search batch size. Keep `1` unless actor results expose source search URLs for attribution. |
+| `JOBFINDER_SCRAPER_MAX_RESULTS_PER_SEARCH` | `500` | Maximum LinkedIn results per keyword. |
+| `JOBFINDER_SCRAPER_POSTED_TIME_WINDOW` | `since_previous_run` | Use `since_previous_run`, `last_24h`, `last_7d`, or `backfill` to control provider posted-time filters. LinkedIn uses second-based windows; Indeed and Stepstone use the closest supported actor day bucket when possible. |
+| `JOBFINDER_SCRAPER_SEARCH_WINDOW_BUFFER_SECONDS` | `3600` | Extra search-window padding before exact posted-time filtering, to avoid missing jobs while the run is starting. |
+| `JOBFINDER_SCRAPER_MAX_APPLICANTS` | `100` | Maximum applicants per job after scraping. Use `0` for no limit. |
 | `APIFY_RUN_MEMORY_MB` | `512` | Memory assigned to each Apify actor run. |
 | `APIFY_RUN_TIMEOUT_SECONDS` | `3600` | Maximum Apify actor runtime per keyword search. |
 | `APIFY_CLIENT_TIMEOUT_SECONDS` | `120` | HTTP timeout for individual Apify API calls while starting, polling, and reading results. |
 | `APIFY_TRANSIENT_ERROR_RETRIES` | `5` | Number of retry attempts for temporary Apify API/run errors before failing the run. |
 | `APIFY_RETRY_DELAY_SECONDS` | `30` | Base delay before retrying a temporary Apify issue; later retries back off from this value. |
-| `JOBSCRAPER_TIMEZONE` | `Europe/Berlin` | Timezone for terminal logs and new Excel/Google Sheets tab names. |
-| `JOBSCRAPER_POSTED_TIMEZONE` | `Europe/Berlin` | Timezone for the `Posted` column. |
+| `JOBFINDER_SCRAPER_TIMEZONE` | `Europe/Berlin` | Timezone for terminal logs and new Excel/Google Sheets tab names. |
+| `JOBFINDER_SCRAPER_POSTED_TIMEZONE` | `Europe/Berlin` | Timezone for the `Posted` column. |
 | `GOOGLE_SPREADSHEET_ID` | blank | Optional locally. You can also save the ID in `google_spreadsheet_id.txt`. |
-| `INDEED_COUNTRY` | `DE` | Indeed country code when `JOBSCRAPER_SOURCES` includes `indeed`. |
-| `INDEED_LOCATION` | `Germany` | Indeed location when `JOBSCRAPER_SOURCES` includes `indeed`. |
+| `INDEED_COUNTRY` | `DE` | Indeed country code when `JOBFINDER_SCRAPER_SOURCES` includes `indeed`. |
+| `INDEED_LOCATION` | `Germany` | Indeed location when `JOBFINDER_SCRAPER_SOURCES` includes `indeed`. |
 | `INDEED_MAX_RESULTS_PER_SEARCH` | `500` | Maximum Indeed results per keyword, capped at the actor limit of 1000. |
 | `INDEED_MAX_CONCURRENCY` | `5` | Maximum Indeed actor searches run at the same time. |
 | `STEPSTONE_LOCATION` | `deutschland` | Stepstone location slug for keyword searches. |
@@ -166,7 +166,7 @@ Common settings:
 | `JOB_EVAL_CV_PHOTO_FILE` | `cv/photo.jpg` | Optional photo copied into each temporary LaTeX build directory. |
 | `JOB_EVAL_CV_PDF_TIMEOUT` | `120` | Max seconds per LaTeX compilation. |
 | `JOB_EVAL_CV_DRIVE_PARENT_FOLDER` | `JobFinder` | Google Drive parent folder for timestamped run folders. |
-| `JOB_EVAL_CV_PDF_APPLICANT_NAME` | `Amir Donyadide` | Applicant name used in upload-safe PDF filenames like `12_CV_Amir_Donyadide_GIS_Analyst_Acme.pdf`. |
+| `JOB_EVAL_CV_PDF_APPLICANT_NAME` | `Applicant` | Applicant name used in upload-safe PDF filenames like `12_CV_Applicant_GIS_Analyst_Acme.pdf`. |
 | `JOB_EVAL_LARGE_QUEUE_THRESHOLD` | `200` | Enable request pacing when more than this many rows are queued for OpenAI. |
 | `JOB_EVAL_LARGE_QUEUE_SLEEP_MS` | `2000` | Milliseconds to wait between OpenAI request starts for large queues. |
 | `JOB_EVAL_SAVE_BATCH_SIZE` | `1` | Number of completed evaluations to save per write. `1` preserves row-by-row crash recovery. |
@@ -189,7 +189,8 @@ Use a Google service account for Google Sheets access:
 8. Share a Google Drive folder named `JobFinder` with that email as Editor, or
    let JobFinder create it for the service account.
 
-Save the downloaded JSON key in this repository as:
+Save the downloaded JSON key in this repository as a shared credential when one
+service account should handle both Sheets and Drive fallback access:
 
 ```text
 google_service_account.json
@@ -201,6 +202,17 @@ If Google downloaded the key with a project-specific name such as
 ```bash
 mv ~/Downloads/jobfinder-*.json google_service_account.json
 ```
+
+For separate service accounts, save the keys as:
+
+```text
+google_sheets_service_account.json
+google_drive_service_account.json
+```
+
+You can also set `GOOGLE_SHEETS_SERVICE_ACCOUNT_FILE`,
+`GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE`, or `GOOGLE_SERVICE_ACCOUNT_FILE` in `.env`
+to point at custom credential paths.
 
 Then set `GOOGLE_SPREADSHEET_ID` in `.env`, or save the spreadsheet ID in:
 
@@ -220,7 +232,7 @@ The spreadsheet ID is:
 1abcDEFghiJKLmnop123
 ```
 
-Do not commit `google_service_account.json` or `google_spreadsheet_id.txt`.
+Do not commit Google credential files or `google_spreadsheet_id.txt`.
 
 Local OAuth with `google_client_secret.json` and `google_token.json` is still
 supported as a fallback, but service-account auth matches the GitHub Actions
@@ -237,7 +249,7 @@ Drive because service accounts cannot use your personal Drive storage quota:
 
    ```bash
    env PYTHONPATH=src python - <<'PY'
-   from jobfinder.google_drive import build_google_drive_service
+from jobfinder.integrations.google.drive import build_google_drive_service
 
    build_google_drive_service(error_cls=RuntimeError)
    print("Created or refreshed google_token.json")
@@ -281,7 +293,7 @@ Scrape to Google Sheets without evaluation:
 python run_job_pipeline.py --mode scrape_only
 ```
 
-Scrape only with `JOBSCRAPER_OUTPUT_MODE` from `.env`:
+Scrape only with `JOBFINDER_SCRAPER_OUTPUT_MODE` from `.env`:
 
 ```bash
 python linkedin_job_scraper.py
@@ -301,7 +313,7 @@ python job_fit_evaluator.py --source excel --sheet latest
 
 ## 7. Read The Results
 
-- `python linkedin_job_scraper.py` writes `jobs.xlsx` when `JOBSCRAPER_OUTPUT_MODE=excel`.
+- `python linkedin_job_scraper.py` writes `jobs.xlsx` when `JOBFINDER_SCRAPER_OUTPUT_MODE=excel`.
 - Google Sheets runs create a new dated tab in the configured spreadsheet.
 - `python run_job_pipeline.py` evaluates the latest new Google Sheet tab in place.
 - Completed evaluations are saved as rows finish, so a later failure keeps already completed rows.

@@ -138,7 +138,7 @@ storage quota.
 
    ```bash
    env PYTHONPATH=src python - <<'PY'
-   from jobfinder.google_drive import build_google_drive_service
+from jobfinder.integrations.google.drive import build_google_drive_service
 
    build_google_drive_service(error_cls=RuntimeError)
    print("Created or refreshed google_token.json")
@@ -297,13 +297,13 @@ uses `deutschland`.
 The current workflow sets these runtime values in `.github/workflows/jobs.yml`:
 
 ```yaml
-JOBSCRAPER_OUTPUT_MODE: "google_sheets"
-JOBSCRAPER_SOURCES: ${{ github.event.inputs.sources || 'all' }}
+JOBFINDER_SCRAPER_OUTPUT_MODE: "google_sheets"
+JOBFINDER_SCRAPER_SOURCES: ${{ github.event.inputs.sources || 'all' }}
 JOBFINDER_PIPELINE_MODE: ${{ github.event.inputs.run_mode || 'scrape_and_evaluate' }}
-JOBSCRAPER_POSTED_TIME_WINDOW: ${{ github.event.inputs.posted_time_window || 'since_previous_run' }}
-JOBSCRAPER_MAX_APPLICANTS: ${{ github.event.inputs.max_applicants == 'no_limit' && '0' || github.event.inputs.max_applicants || '50' }}
-JOBSCRAPER_SEARCH_CONCURRENCY: "15"
-JOBSCRAPER_SEARCH_WINDOW_BUFFER_SECONDS: "3600"
+JOBFINDER_SCRAPER_POSTED_TIME_WINDOW: ${{ github.event.inputs.posted_time_window || 'since_previous_run' }}
+JOBFINDER_SCRAPER_MAX_APPLICANTS: ${{ github.event.inputs.max_applicants == 'no_limit' && '0' || github.event.inputs.max_applicants || '50' }}
+JOBFINDER_SCRAPER_SEARCH_CONCURRENCY: "15"
+JOBFINDER_SCRAPER_SEARCH_WINDOW_BUFFER_SECONDS: "3600"
 APIFY_RUN_MEMORY_MB: "512"
 APIFY_RUN_TIMEOUT_SECONDS: "3600"
 APIFY_CLIENT_TIMEOUT_SECONDS: "120"
@@ -314,14 +314,14 @@ INDEED_LOCATION: "Germany"
 STEPSTONE_LOCATION: "deutschland"
 STEPSTONE_MAX_CONCURRENCY: "10"
 STEPSTONE_MAX_REQUEST_RETRIES: "3"
-JOBSCRAPER_TIMEZONE: Europe/Berlin
-JOBSCRAPER_POSTED_TIMEZONE: Europe/Berlin
+JOBFINDER_SCRAPER_TIMEZONE: Europe/Berlin
+JOBFINDER_SCRAPER_POSTED_TIMEZONE: Europe/Berlin
 JOB_EVAL_OPENAI_MODEL: "gpt-5-mini"
 JOB_EVAL_CONCURRENCY: "8"
 JOB_EVAL_BATCH_SIZE: "40"
 JOB_EVAL_CV_PDF_OUTPUT: "true"
 JOB_EVAL_CV_PHOTO_FILE: cv/photo.jpg
-JOB_EVAL_CV_PDF_APPLICANT_NAME: "Amir Donyadide"
+JOB_EVAL_CV_PDF_APPLICANT_NAME: "Applicant"
 JOB_EVAL_CV_PDF_TIMEOUT: "120"
 JOB_EVAL_LARGE_QUEUE_THRESHOLD: "200"
 JOB_EVAL_LARGE_QUEUE_SLEEP_MS: "2000"

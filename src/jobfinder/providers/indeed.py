@@ -35,10 +35,12 @@ INDEED_DOMAIN_BY_COUNTRY = {
 }
 INDEED_MAX_LIMIT = 1000
 INDEED_DATE_POSTED_DAYS = (1, 3, 7, 14)
-INDEED_RESULT_RUNNER = Callable[
+IndeedActorRunner = Callable[
     [ScraperSettings, str, dict[str, Any], int],
     list[dict[str, Any]],
 ]
+INDEED_RESULT_RUNNER = IndeedActorRunner
+"""Backward-compatible alias for the Indeed actor runner type."""
 
 BENEFIT_WORDS = (
     "insurance",
@@ -214,7 +216,8 @@ def seconds_from_published_at(value: str) -> int | None:
 
 def date_posted_filter(settings: ScraperSettings) -> str:
     """Map scraper posted windows to Indeed's supported day buckets."""
-    seconds = seconds_from_published_at(settings.published_at)
+    posted_window = getattr(settings, "provider_posted_window", settings.published_at)
+    seconds = seconds_from_published_at(posted_window)
     if seconds is None:
         return ""
 
@@ -243,7 +246,7 @@ def run_actor_search(
     payload: dict[str, Any],
     max_items: int,
     *,
-    actor_runner: INDEED_RESULT_RUNNER = run_actor,
+    actor_runner: IndeedActorRunner = run_actor,
 ) -> list[dict[str, Any]]:
     """Run the Indeed actor and normalize actor-specific output."""
     items = actor_runner(settings, actor_id, payload, max_items)

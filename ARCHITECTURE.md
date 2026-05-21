@@ -41,7 +41,8 @@ pipeline CLI behavior.
 | Added provider registry | `src/jobfinder/providers/registry.py` | Existing `scraper/search.py` public helpers still exist. |
 | Reduced scraper orchestration coupling | `src/jobfinder/scraper/search.py`, `src/jobfinder/scraper/normalize.py` | Public functions and behavior remain compatible. |
 | Standardized CLI logging | `src/jobfinder/scraper/cli.py`, `src/jobfinder/evaluator/cli.py`, `src/jobfinder/pipeline/cli.py` | CLI output format remains the same. |
-| Centralized env-backed integration settings | `src/jobfinder/google_sheets.py`, `src/jobfinder/operations/reports.py`, `src/jobfinder/pipeline/cli.py` | Real environment variables still override `.env`. |
+| Centralized env-backed integration settings | `src/jobfinder/integrations/google/credentials.py`, `src/jobfinder/operations/reports.py`, `src/jobfinder/pipeline/cli.py` | Real environment variables still override `.env`. |
+| Moved Google implementation behind integration names | `src/jobfinder/integrations/google/` | Current `jobfinder.google_*` modules remain compatibility facades. |
 
 ## Target Folder Structure
 
@@ -55,16 +56,15 @@ src/jobfinder/
   spreadsheet/          # Shared column contracts
   pipeline/             # Multi-step CLI and preflight checks
   operations/           # CI/reporting helpers
+  integrations/google/  # Google credentials, client, Sheets, and Drive adapters
   env.py                # Environment reader
   paths.py              # Repository path constants
   config_files.py       # User-editable config file loading
-  google_sheets.py      # Google API auth/execute primitives
-  google_drive.py       # Drive-specific helpers
+  google_config.py      # Compatibility facade for Google credential paths
+  google_auth.py        # Compatibility facade for Google client helpers
+  google_sheets.py      # Compatibility facade for Sheets helpers
+  google_drive.py       # Compatibility facade for Drive helpers
 ```
-
-Long-term, `google_sheets.py` and `google_drive.py` can move under an
-`integrations/google/` package, with compatibility imports at their current
-paths.
 
 ## Module Ownership Boundaries
 
@@ -103,8 +103,8 @@ paths.
 - `evaluator/service.py` coordinates input reads, OpenAI evaluation, incremental
   saves, PDF generation, and final cleanup. The next growth point is a
   `EvaluationWorkflow` object with injectable storage and evaluator ports.
-- Google Sheets and Drive helpers are still top-level modules. Move them into an
-  integration package when there is a second non-Google storage backend.
+- Google Sheets and Drive helpers now have integration-owned names, but the
+  compatibility facades still need a deprecation window before removal.
 - Root scripts and `scripts/` duplicate compatibility wrappers. Keep them for
   backward compatibility, but avoid adding logic there.
 
@@ -114,8 +114,8 @@ paths.
 2. Split run-history identity generation from Google Sheets I/O.
 3. Introduce storage ports for evaluator reads/writes:
    `EvaluationInputStore` and `EvaluationOutputStore`.
-4. Move Google integrations under `jobfinder.integrations.google` with
-   compatibility imports from current modules.
+4. Update internal and external examples to prefer
+   `jobfinder.integrations.google`.
 5. Extract scraper workflow logging into a small run-summary/presenter helper if
    `scraper/service.py` grows further.
 6. Add import-boundary checks in CI once package boundaries settle.

@@ -11,7 +11,8 @@ from urllib.parse import parse_qs, urlparse
 from zoneinfo import ZoneInfo
 
 import jobfinder.dedupe.normalize as dedupe_normalize
-from jobfinder.google_sheets import google_execute, quote_sheet_name
+from jobfinder.integrations.google.client import google_execute
+from jobfinder.integrations.google.sheets import quote_sheet_name
 from jobfinder.scraper.normalize import (
     get_apply_url,
     get_company,

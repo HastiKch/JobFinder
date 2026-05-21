@@ -17,7 +17,7 @@ from jobfinder.scraper.service import (
     sort_key,
 )
 from jobfinder.scraper.settings import (
-    TOKEN_ENV_VAR,
+    APIFY_API_TOKEN_ENV,
     TOKEN_PLACEHOLDER,
     load_scraper_settings,
 )
@@ -67,15 +67,15 @@ def main() -> int:
     if not settings.apify_api_tokens:
         LOGGER.error(
             "Please set %s in %s or as an environment variable.",
-            TOKEN_ENV_VAR,
+            APIFY_API_TOKEN_ENV,
             settings.token_file.name,
         )
-        LOGGER.info("Example: %s=%s", TOKEN_ENV_VAR, TOKEN_PLACEHOLDER)
+        LOGGER.info("Example: %s=%s", APIFY_API_TOKEN_ENV, TOKEN_PLACEHOLDER)
         write_report_from_env(
             "JOBFINDER_SCRAPER_REPORT_FILE",
             "failed",
             "configuration",
-            {"error": f"Missing required setting: {TOKEN_ENV_VAR}"},
+            {"error": f"Missing required setting: {APIFY_API_TOKEN_ENV}"},
         )
         return 1
 

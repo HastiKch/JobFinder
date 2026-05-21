@@ -8,10 +8,20 @@ from pathlib import Path
 
 import pytest
 
-from jobfinder.google_sheets import (
-    build_google_api_service,
-    build_google_sheets_service,
+from jobfinder.env import EnvSettings
+from jobfinder.integrations.google.client import build_google_api_service
+from jobfinder.integrations.google.credentials import (
+    GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE_ENV,
+    GOOGLE_OAUTH_CLIENT_SECRET_FILE_ENV,
+    GOOGLE_OAUTH_TOKEN_FILE_ENV,
+    GOOGLE_SHARED_SERVICE_ACCOUNT_FILE_ENV,
+    GOOGLE_SHEETS_SERVICE_ACCOUNT_FILE_ENV,
+    GoogleAuthConfig,
+    default_google_auth_config,
 )
+from jobfinder.integrations.google.drive import build_google_drive_service
+from jobfinder.integrations.google.sheets import build_google_sheets_service
+from jobfinder.paths import PROJECT_ROOT
 
 
 def install_fake_google_modules(
@@ -325,3 +335,106 @@ def test_build_google_sheets_service_rewrites_oauth_token_privately(
 
     assert token_file.read_text(encoding="utf-8") == '{"token": "new"}'
     assert token_file.stat().st_mode & 0o777 == 0o600
+
+
+def test_build_google_sheets_service_uses_configured_sheets_credentials(
+    tmp_path, monkeypatch
+):
+    """Sheets should use its configured service-account key."""
+    sheets_service_account_file = tmp_path / "google_sheets_service_account.json"
+    drive_service_account_file = tmp_path / "google_drive_service_account.json"
+    sheets_service_account_file.write_text("{}", encoding="utf-8")
+    auth_config = GoogleAuthConfig(
+        sheets_service_account_file=sheets_service_account_file,
+        drive_service_account_file=drive_service_account_file,
+        oauth_client_secret_file=tmp_path / "google_client_secret.json",
+        oauth_token_file=tmp_path / "google_token.json",
+    )
+    calls: dict[str, object] = {}
+
+    def fake_from_service_account_file(filename, scopes):
+        calls["service_account_file"] = Path(filename)
+        return "sheets-service-account-creds"
+
+    install_fake_google_modules(
+        monkeypatch,
+        service_account_loader=fake_from_service_account_file,
+    )
+
+    build_google_sheets_service(error_cls=RuntimeError, auth_config=auth_config)
+
+    assert calls["service_account_file"] == sheets_service_account_file
+
+
+def test_build_google_drive_service_uses_configured_drive_credentials_fallback(
+    tmp_path, monkeypatch
+):
+    """Drive should fall back to its configured service-account key."""
+    sheets_service_account_file = tmp_path / "google_sheets_service_account.json"
+    drive_service_account_file = tmp_path / "google_drive_service_account.json"
+    drive_service_account_file.write_text("{}", encoding="utf-8")
+    auth_config = GoogleAuthConfig(
+        sheets_service_account_file=sheets_service_account_file,
+        drive_service_account_file=drive_service_account_file,
+        oauth_client_secret_file=tmp_path / "google_client_secret.json",
+        oauth_token_file=tmp_path / "google_token.json",
+    )
+    calls: dict[str, object] = {}
+
+    def fake_from_service_account_file(filename, scopes):
+        calls["service_account_file"] = Path(filename)
+        calls["scopes"] = scopes
+        return "drive-service-account-creds"
+
+    install_fake_google_modules(
+        monkeypatch,
+        service_account_loader=fake_from_service_account_file,
+    )
+
+    build_google_drive_service(error_cls=RuntimeError, auth_config=auth_config)
+
+    assert calls["service_account_file"] == drive_service_account_file
+    assert calls["scopes"] == ["https://www.googleapis.com/auth/drive"]
+
+
+def test_default_google_auth_config_resolves_service_specific_env_paths(
+    tmp_path, monkeypatch
+):
+    """Credential path settings should live in one typed config object."""
+    env_names = [
+        GOOGLE_SHARED_SERVICE_ACCOUNT_FILE_ENV,
+        GOOGLE_SHEETS_SERVICE_ACCOUNT_FILE_ENV,
+        GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE_ENV,
+        GOOGLE_OAUTH_CLIENT_SECRET_FILE_ENV,
+        GOOGLE_OAUTH_TOKEN_FILE_ENV,
+    ]
+    for name in env_names:
+        monkeypatch.delenv(name, raising=False)
+
+    settings = EnvSettings(
+        local_values={
+            GOOGLE_SHARED_SERVICE_ACCOUNT_FILE_ENV: str(
+                tmp_path / "shared-service-account.json"
+            ),
+            GOOGLE_SHEETS_SERVICE_ACCOUNT_FILE_ENV: str(
+                tmp_path / "sheets-service-account.json"
+            ),
+            GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE_ENV: "drive-service-account.json",
+            GOOGLE_OAUTH_CLIENT_SECRET_FILE_ENV: str(tmp_path / "oauth-client.json"),
+            GOOGLE_OAUTH_TOKEN_FILE_ENV: str(tmp_path / "oauth-token.json"),
+        }
+    )
+
+    auth_config = default_google_auth_config(settings)
+
+    assert auth_config.sheets_service_account_file == (
+        tmp_path / "sheets-service-account.json"
+    )
+    assert auth_config.drive_service_account_file == (
+        PROJECT_ROOT / "drive-service-account.json"
+    )
+    assert auth_config.oauth_client_secret_file == tmp_path / "oauth-client.json"
+    assert auth_config.oauth_token_file == tmp_path / "oauth-token.json"
+    assert auth_config.shared_service_account_file == (
+        tmp_path / "shared-service-account.json"
+    )

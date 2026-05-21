@@ -22,8 +22,11 @@ from jobfinder.spreadsheet.schema import (
     SCRAPER_OUTPUT_COLUMNS,
 )
 
-HEADER = SCRAPER_OUTPUT_COLUMNS
+SCRAPER_HEADER = SCRAPER_OUTPUT_COLUMNS
 """Stable output columns written by scraper exports."""
+
+HEADER = SCRAPER_HEADER
+"""Backward-compatible alias for scraper export headers."""
 
 
 def sheets_string(value: str) -> str:
@@ -42,7 +45,7 @@ def make_job_rows(
     settings: ScraperSettings, jobs: list[dict[str, Any]]
 ) -> list[list[Any]]:
     """Convert normalized job dictionaries into spreadsheet rows."""
-    rows: list[list[Any]] = [HEADER]
+    rows: list[list[Any]] = [SCRAPER_HEADER]
     for job in jobs:
         job_url = get_job_url(settings, job)
         apply_url = get_apply_url(job)

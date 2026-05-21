@@ -27,11 +27,11 @@ from jobfinder.paths import (
     KEYWORDS_FILE,
 )
 
-TOKEN_ENV_VAR = "APIFY_API_TOKEN"
+APIFY_API_TOKEN_ENV = "APIFY_API_TOKEN"
 TOKEN_PLACEHOLDER = "apify_api_XXXXXXXXXXXX"
 TOKEN_SEPARATOR = ";"
 MAX_APIFY_API_TOKENS = 12
-SPREADSHEET_TITLE = "jobs"
+DEFAULT_SPREADSHEET_TITLE = "jobs"
 DEFAULT_APIFY_RUN_TIMEOUT_SECONDS = 3600
 DEFAULT_APIFY_CLIENT_TIMEOUT_SECONDS = 120
 DEFAULT_APIFY_TRANSIENT_ERROR_RETRIES = 5
@@ -44,6 +44,12 @@ LINKEDIN_ACTOR_ID = "curious_coder~linkedin-jobs-scraper"
 INDEED_ACTOR_ID = "valig~indeed-jobs-scraper"
 INDEED_MAX_RESULTS_LIMIT = 1000
 STEPSTONE_ACTOR_ID = "memo23~stepstone-search-cheerio-ppr"
+
+TOKEN_ENV_VAR = APIFY_API_TOKEN_ENV
+"""Backward-compatible alias for the Apify token environment variable name."""
+
+SPREADSHEET_TITLE = DEFAULT_SPREADSHEET_TITLE
+"""Backward-compatible alias for the default spreadsheet title."""
 
 SOURCE_ORDER = ("linkedin", "indeed", "stepstone")
 SOURCE_DISPLAY_NAMES = {
@@ -122,8 +128,8 @@ class ApifyTokenSelection:
     def label(self) -> str:
         """Return a log-safe token label without exposing the secret."""
         if self.total <= 1:
-            return TOKEN_ENV_VAR
-        return f"{TOKEN_ENV_VAR} #{self.index + 1}"
+            return APIFY_API_TOKEN_ENV
+        return f"{APIFY_API_TOKEN_ENV} #{self.index + 1}"
 
 
 class ApifyTokenPool:
@@ -267,6 +273,26 @@ class ScraperSettings:
         """Return the file used to cache the Google spreadsheet ID."""
         return GOOGLE_SPREADSHEET_ID_FILE
 
+    @property
+    def provider_selection(self) -> str:
+        """Return the configured job-provider selection string."""
+        return self.source_mode
+
+    @property
+    def provider_actor_ids(self) -> dict[str, str]:
+        """Return Apify actor IDs keyed by provider."""
+        return self.source_actor_ids
+
+    @property
+    def provider_max_items(self) -> dict[str, int]:
+        """Return maximum actor items keyed by provider."""
+        return self.source_max_items
+
+    @property
+    def provider_posted_window(self) -> str:
+        """Return the provider-facing posted-time filter value."""
+        return self.published_at
+
 
 def load_scraper_settings(env: EnvSettings | None = None) -> ScraperSettings:
     """Resolve and validate scraper settings."""
@@ -277,17 +303,29 @@ def load_scraper_settings(env: EnvSettings | None = None) -> ScraperSettings:
     except ConfigFileError as exc:
         raise RuntimeError(f"Configuration error: {exc}") from exc
 
-    scraper_timezone = env.get("JOBSCRAPER_TIMEZONE", "Europe/Berlin")
-    posted_timezone = env.get("JOBSCRAPER_POSTED_TIMEZONE", "Europe/Berlin")
-    scraper_tz = load_timezone(scraper_timezone, "JOBSCRAPER_TIMEZONE")
-    posted_tz = load_timezone(posted_timezone, "JOBSCRAPER_POSTED_TIMEZONE")
+    scraper_timezone = env.get_alias(
+        "JOBFINDER_SCRAPER_TIMEZONE",
+        "JOBSCRAPER_TIMEZONE",
+        default="Europe/Berlin",
+    )
+    posted_timezone = env.get_alias(
+        "JOBFINDER_SCRAPER_POSTED_TIMEZONE",
+        "JOBSCRAPER_POSTED_TIMEZONE",
+        default="Europe/Berlin",
+    )
+    scraper_tz = load_timezone(scraper_timezone, "JOBFINDER_SCRAPER_TIMEZONE")
+    posted_tz = load_timezone(posted_timezone, "JOBFINDER_SCRAPER_POSTED_TIMEZONE")
 
     run_started_at_utc = datetime.now(UTC)
     run_started_at = run_started_at_utc.astimezone(scraper_tz)
 
     max_results_per_search = max(
         1,
-        env.get_int("JOBSCRAPER_MAX_RESULTS_PER_SEARCH", 500),
+        env.get_int_alias(
+            "JOBFINDER_SCRAPER_MAX_RESULTS_PER_SEARCH",
+            "JOBSCRAPER_MAX_RESULTS_PER_SEARCH",
+            default=500,
+        ),
     )
     indeed_max_results = min(
         INDEED_MAX_RESULTS_LIMIT,
@@ -319,18 +357,29 @@ def load_scraper_settings(env: EnvSettings | None = None) -> ScraperSettings:
     apify_run_memory_mb = max(128, env.get_int("APIFY_RUN_MEMORY_MB", 512))
     apify_memory_limit_mb = max(
         0,
-        env.get_int("JOBSCRAPER_APIFY_MEMORY_LIMIT_MB", 0),
+        env.get_int_alias(
+            "JOBFINDER_SCRAPER_APIFY_MEMORY_LIMIT_MB",
+            "JOBSCRAPER_APIFY_MEMORY_LIMIT_MB",
+            default=0,
+        ),
     )
     search_concurrency = min(
         MAX_SEARCH_CONCURRENCY,
-        max(1, env.get_int("JOBSCRAPER_SEARCH_CONCURRENCY", 15)),
+        max(
+            1,
+            env.get_int_alias(
+                "JOBFINDER_SCRAPER_SEARCH_CONCURRENCY",
+                "JOBSCRAPER_SEARCH_CONCURRENCY",
+                default=15,
+            ),
+        ),
     )
     if apify_memory_limit_mb:
         search_concurrency = min(
             search_concurrency,
             max(1, apify_memory_limit_mb // apify_run_memory_mb),
         )
-    raw_apify_token = env.get(TOKEN_ENV_VAR)
+    raw_apify_token = env.get(APIFY_API_TOKEN_ENV)
     apify_api_tokens = parse_apify_api_tokens(raw_apify_token)
 
     return ScraperSettings(
@@ -348,15 +397,30 @@ def load_scraper_settings(env: EnvSettings | None = None) -> ScraperSettings:
         run_started_at_utc=run_started_at_utc,
         run_started_at=run_started_at,
         run_sheet_name=run_started_at.strftime("%Y-%m-%d %H-%M-%S"),
-        source_mode=env.get("JOBSCRAPER_SOURCES", "linkedin").lower(),
-        output_mode=env.get("JOBSCRAPER_OUTPUT_MODE", "excel").lower(),
+        source_mode=env.get_alias(
+            "JOBFINDER_SCRAPER_SOURCES",
+            "JOBSCRAPER_SOURCES",
+            default="linkedin",
+        ).lower(),
+        output_mode=env.get_alias(
+            "JOBFINDER_SCRAPER_OUTPUT_MODE",
+            "JOBSCRAPER_OUTPUT_MODE",
+            default="excel",
+        ).lower(),
         excel_output_file=DEFAULT_EXCEL_FILE,
         max_results_per_search=max_results_per_search,
         indeed_max_results_per_search=indeed_max_results,
         search_concurrency=search_concurrency,
         apify_batch_size=min(
             MAX_APIFY_BATCH_SIZE,
-            max(1, env.get_int("JOBSCRAPER_APIFY_BATCH_SIZE", 1)),
+            max(
+                1,
+                env.get_int_alias(
+                    "JOBFINDER_SCRAPER_APIFY_BATCH_SIZE",
+                    "JOBSCRAPER_APIFY_BATCH_SIZE",
+                    default=1,
+                ),
+            ),
         ),
         apify_memory_limit_mb=apify_memory_limit_mb,
         apify_run_memory_mb=apify_run_memory_mb,
@@ -374,13 +438,26 @@ def load_scraper_settings(env: EnvSettings | None = None) -> ScraperSettings:
             env.get_int("APIFY_RETRY_DELAY_SECONDS", DEFAULT_APIFY_RETRY_DELAY_SECONDS),
         ),
         delay_between_requests=max(
-            0, env.get_int("JOBSCRAPER_DELAY_BETWEEN_REQUESTS", 0)
+            0,
+            env.get_int_alias(
+                "JOBFINDER_SCRAPER_DELAY_BETWEEN_REQUESTS",
+                "JOBSCRAPER_DELAY_BETWEEN_REQUESTS",
+                default=0,
+            ),
         ),
         search_window_buffer_seconds=max(
-            0, env.get_int("JOBSCRAPER_SEARCH_WINDOW_BUFFER_SECONDS", 3600)
+            0,
+            env.get_int_alias(
+                "JOBFINDER_SCRAPER_SEARCH_WINDOW_BUFFER_SECONDS",
+                "JOBSCRAPER_SEARCH_WINDOW_BUFFER_SECONDS",
+                default=3600,
+            ),
         ),
         posted_time_window=parse_posted_time_window(
-            env.get("JOBSCRAPER_POSTED_TIME_WINDOW")
+            env.get_alias(
+                "JOBFINDER_SCRAPER_POSTED_TIME_WINDOW",
+                "JOBSCRAPER_POSTED_TIME_WINDOW",
+            )
         ),
         location=location,
         geo_id=config_str(filter_config, "linkedin_search", "geo_id", "101282230"),
@@ -393,9 +470,21 @@ def load_scraper_settings(env: EnvSettings | None = None) -> ScraperSettings:
         contract_types=config_list(
             filter_config, "linkedin_search", "contract_types", ["F", "P", "I"]
         ),
-        scrape_company_details=env.get_bool("JOBSCRAPER_SCRAPE_COMPANY_DETAILS", False),
-        use_incognito_mode=env.get_bool("JOBSCRAPER_USE_INCOGNITO_MODE", True),
-        split_by_location=env.get_bool("JOBSCRAPER_SPLIT_BY_LOCATION", False),
+        scrape_company_details=env.get_bool_alias(
+            "JOBFINDER_SCRAPER_SCRAPE_COMPANY_DETAILS",
+            "JOBSCRAPER_SCRAPE_COMPANY_DETAILS",
+            default=False,
+        ),
+        use_incognito_mode=env.get_bool_alias(
+            "JOBFINDER_SCRAPER_USE_INCOGNITO_MODE",
+            "JOBSCRAPER_USE_INCOGNITO_MODE",
+            default=True,
+        ),
+        split_by_location=env.get_bool_alias(
+            "JOBFINDER_SCRAPER_SPLIT_BY_LOCATION",
+            "JOBSCRAPER_SPLIT_BY_LOCATION",
+            default=False,
+        ),
         split_country=config_str(
             filter_config, "linkedin_search", "split_country", "DE"
         ),
@@ -412,7 +501,12 @@ def load_scraper_settings(env: EnvSettings | None = None) -> ScraperSettings:
             DEFAULT_EXCLUDED_COMPANY_TERMS,
         ),
         max_applicants=max(
-            0, env.get_int("JOBSCRAPER_MAX_APPLICANTS", config_max_applicants)
+            0,
+            env.get_int_alias(
+                "JOBFINDER_SCRAPER_MAX_APPLICANTS",
+                "JOBSCRAPER_MAX_APPLICANTS",
+                default=config_max_applicants,
+            ),
         ),
         application_status_options=config_list(
             filter_config,
@@ -485,7 +579,8 @@ def parse_posted_time_window(value: str | None) -> str:
         ]
     )
     raise RuntimeError(
-        f"Unsupported JOBSCRAPER_POSTED_TIME_WINDOW {value!r}. Use one of: {allowed}."
+        "Unsupported JOBFINDER_SCRAPER_POSTED_TIME_WINDOW "
+        f"{value!r}. Use one of: {allowed}."
     )
 
 
@@ -510,7 +605,7 @@ def parse_apify_api_tokens(value: str | None) -> tuple[str, ...]:
             continue
         if len(tokens) >= MAX_APIFY_API_TOKENS:
             raise RuntimeError(
-                f"{TOKEN_ENV_VAR} supports at most {MAX_APIFY_API_TOKENS} "
+                f"{APIFY_API_TOKEN_ENV} supports at most {MAX_APIFY_API_TOKENS} "
                 f"semicolon-separated token(s)."
             )
         tokens.append(token)

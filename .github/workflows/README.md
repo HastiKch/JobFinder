@@ -63,7 +63,7 @@ flowchart TD
     K --> L["remove private runtime files"]
 ```
 
-The workflow sets `JOBSCRAPER_OUTPUT_MODE=google_sheets` and writes private
+The workflow sets `JOBFINDER_SCRAPER_OUTPUT_MODE=google_sheets` and writes private
 runtime files from secrets. Cleanup removes those files in an `always()` step.
 
 ## Required Secrets
