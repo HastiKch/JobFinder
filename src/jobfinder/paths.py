@@ -34,9 +34,7 @@ GOOGLE_OAUTH_TOKEN_FILE = PROJECT_ROOT / "google_token.json"
 GOOGLE_SHARED_SERVICE_ACCOUNT_FILE = PROJECT_ROOT / "google_service_account.json"
 """Shared Google service-account credentials file."""
 
-GOOGLE_SHEETS_SERVICE_ACCOUNT_FILE = (
-    PROJECT_ROOT / "google_sheets_service_account.json"
-)
+GOOGLE_SHEETS_SERVICE_ACCOUNT_FILE = PROJECT_ROOT / "google_sheets_service_account.json"
 """Google Sheets service-account credentials file."""
 
 GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE = PROJECT_ROOT / "google_drive_service_account.json"
