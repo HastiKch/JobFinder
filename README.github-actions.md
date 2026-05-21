@@ -153,7 +153,8 @@ storage quota.
 
 If `GOOGLE_DRIVE_TOKEN_JSON` is missing or is not an authorized-user token, the
 workflow falls back to service-account Drive credentials and continues with a
-warning.
+warning. Generated `google_token.json` files are accepted even when they omit a
+top-level `type` field.
 
 ## 4. Prepare Private Content
 

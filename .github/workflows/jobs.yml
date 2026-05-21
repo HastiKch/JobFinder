@@ -287,7 +287,14 @@ jobs:
                       f"credentials if possible. Details: {exc}"
                   )
               else:
-                  if drive_token.get("type") == "authorized_user":
+                  has_authorized_user_fields = all(
+                      drive_token.get(key)
+                      for key in ("client_id", "client_secret", "refresh_token")
+                  )
+                  if (
+                      drive_token.get("type") == "authorized_user"
+                      or has_authorized_user_fields
+                  ):
                       Path("google_token.json").write_text(
                           drive_token_json, encoding="utf-8"
                       )
