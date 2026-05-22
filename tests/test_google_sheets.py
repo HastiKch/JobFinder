@@ -205,9 +205,7 @@ def test_build_google_sheets_service_uses_shared_oauth_token(tmp_path, monkeypat
     assert calls["build"] == ("sheets", "v4", ANY, False)
 
 
-def test_build_google_api_service_uses_requested_api_with_oauth(
-    tmp_path, monkeypatch
-):
+def test_build_google_api_service_uses_requested_api_with_oauth(tmp_path, monkeypatch):
     """Shared OAuth auth should build the requested Google API."""
     token_file = tmp_path / "google_token.json"
     write_token(token_file)
