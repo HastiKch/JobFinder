@@ -13,7 +13,7 @@ from jobfinder.integrations.google.client import (
 from jobfinder.integrations.google.credentials import GoogleAuthConfig
 
 GOOGLE_DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
-"""OAuth scopes required to create folders and upload PDFs to Google Drive."""
+"""Google API scopes required to create folders and upload PDFs to Google Drive."""
 
 DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
 
@@ -41,14 +41,13 @@ def build_google_drive_service(
     error_cls: type[RuntimeError],
     auth_config: GoogleAuthConfig | None = None,
 ) -> Any:
-    """Build an authenticated Google Drive API service."""
+    """Build a service-account-authenticated Google Drive API service."""
     return build_google_api_service(
         "drive",
         "v3",
         error_cls=error_cls,
         auth_config=auth_config,
         scopes=GOOGLE_DRIVE_SCOPES,
-        prefer_service_account=False,
     )
 
 

@@ -39,8 +39,6 @@ runs, central logs, and private values stored as GitHub repository secrets.
 - A Google Sheet shared with the service-account email as Editor.
 - Google Drive API enabled, plus a `JobFinder` Drive folder shared with the
   service-account email as Editor if you want PDFs in a user-visible folder.
-- For personal Gmail/Google Drive, an authorized-user OAuth token JSON for Drive
-  uploads.
 - Private keyword, prompt, and CV content ready to paste into repository secrets.
 
 ## How The Workflow Runs
@@ -105,8 +103,9 @@ This value goes into the GitHub secret `GOOGLE_SPREADSHEET_ID`.
 
 ## 3. Create A Google Service Account
 
-Use a Google service account for GitHub Actions. It does not require a
-browser-based OAuth refresh token and works well on temporary CI runners.
+Use one Google service account for both Sheets and Drive in GitHub Actions. It
+does not require browser re-authorization and works well on temporary CI
+runners.
 
 1. Open Google Cloud Console.
 2. Enable the Google Sheets API and Google Drive API.
@@ -124,37 +123,6 @@ Copy the full JSON key into the GitHub secret:
 ```text
 GOOGLE_SERVICE_ACCOUNT_JSON
 ```
-
-For a normal personal Gmail/Google Drive account, the service account can still
-update Sheets, but Drive PDF uploads need user OAuth so the files use your Drive
-storage quota.
-
-1. In Google Cloud, open the OAuth consent screen.
-2. Set the app publishing status to **In production** before generating the
-   token. Testing mode refresh tokens expire after 7 days.
-3. Create an OAuth client of type **Desktop app**.
-4. Download the client JSON locally as `google_client_secret.json`.
-5. Run this once from the repository:
-
-   ```bash
-   env PYTHONPATH=src python - <<'PY'
-from jobfinder.integrations.google.drive import build_google_drive_service
-
-   build_google_drive_service(error_cls=RuntimeError)
-   print("Created or refreshed google_token.json")
-   PY
-   ```
-
-6. Copy `google_token.json` into the GitHub secret:
-
-   ```text
-   GOOGLE_DRIVE_TOKEN_JSON
-   ```
-
-If `GOOGLE_DRIVE_TOKEN_JSON` is missing or is not an authorized-user token, the
-workflow falls back to service-account Drive credentials and continues with a
-warning. Generated `google_token.json` files are accepted even when they omit a
-top-level `type` field.
 
 ## 4. Prepare Private Content
 
@@ -177,7 +145,6 @@ cp cv/master_cv.example.tex cv/master_cv.tex
 | `cv/master_cv.tex` | `MASTER_CV_TEX` |
 | `cv/photo.jpg` | `CV_PHOTO_BASE64` (optional, base64 encoded) |
 | `google_service_account.json` | `GOOGLE_SERVICE_ACCOUNT_JSON` |
-| `google_token.json` | `GOOGLE_DRIVE_TOKEN_JSON` |
 
 On macOS, copy each value like this:
 
@@ -186,7 +153,6 @@ pbcopy < configs/keywords.txt
 pbcopy < prompts/master_prompt.txt
 pbcopy < cv/master_cv.tex
 pbcopy < google_service_account.json
-pbcopy < google_token.json
 ```
 
 Paste each copied value into the matching GitHub secret.
@@ -214,7 +180,6 @@ Add these secrets exactly:
 | `OPENAI_API_KEY` | `scrape_and_evaluate` | Your OpenAI API key, for example `sk-...` or `sk-proj-...`. |
 | `GOOGLE_SPREADSHEET_ID` | All runs | The spreadsheet ID from the Google Sheet URL. |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | All runs | The full contents of the service-account JSON key. |
-| `GOOGLE_DRIVE_TOKEN_JSON` | Personal Drive PDF uploads | The full contents of `google_token.json`; if absent or not an authorized-user token, the workflow falls back to service-account Drive credentials. |
 | `JOB_KEYWORDS_TEXT` | All runs | The full contents of `configs/keywords.txt`. |
 | `MASTER_PROMPT_TEXT` | `scrape_and_evaluate` | The full contents of `prompts/master_prompt.txt`. |
 | `MASTER_CV_TEX` | `scrape_and_evaluate` | The full contents of `cv/master_cv.tex`. |
@@ -379,18 +344,16 @@ Use GitHub secrets for private values:
 | CV content | `MASTER_CV_TEX` |
 | Private CV photo | `CV_PHOTO_BASE64` |
 | API keys | `APIFY_API_TOKEN`, `OPENAI_API_KEY` |
-| Google Sheet access | `GOOGLE_SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON` |
-| Google Drive PDF uploads | `GOOGLE_DRIVE_TOKEN_JSON` |
+| Google Sheets and Drive access | `GOOGLE_SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON` |
 
 ## Troubleshooting GitHub Actions
 
 | Problem | What to check |
 |---|---|
 | `Missing repository secret ...` | Add the named secret under GitHub repo settings. |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` error | Copy the full service-account JSON key, not an OAuth client JSON. |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` error | Copy the full service-account JSON key downloaded from Google Cloud. |
 | Google authentication fails | Confirm the spreadsheet is shared with the service-account `client_email` as Editor. |
-| `GOOGLE_DRIVE_TOKEN_JSON` warning | The secret is not the authorized-user OAuth token from `google_token.json`; replace it for personal Drive uploads, or leave it unset to use service-account Drive fallback. |
-| Drive PDF links fail | Enable Google Drive API. For personal Drive, add a valid `GOOGLE_DRIVE_TOKEN_JSON`; service-account-only uploads can fail with storage quota errors. |
+| Drive PDF links fail | Enable Google Drive API and share the `JobFinder` folder with the service-account `client_email` as Editor, or let the service account create it. |
 | `LaTeX compilation failed` in `AI CV PDF` | Check that `latexmk`/`xelatex` installed, the generated LaTeX is valid, and any referenced photo is available through committed `cv/photo.jpg` or `CV_PHOTO_BASE64`. |
 | Spreadsheet not found | Check that `GOOGLE_SPREADSHEET_ID` is only the ID, not the full URL. |
 | Workflow cannot push or fetch repo | Check GitHub authentication and repository permissions. |

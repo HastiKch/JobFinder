@@ -14,7 +14,6 @@ from jobfinder.integrations.google.client import (
     google_api_retries,
     google_api_timeout_seconds,
     google_execute,
-    write_private_text_file,
 )
 
 __all__ = [
@@ -26,5 +25,4 @@ __all__ = [
     "google_api_retries",
     "google_api_timeout_seconds",
     "google_execute",
-    "write_private_text_file",
 ]

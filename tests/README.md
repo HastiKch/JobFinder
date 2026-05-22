@@ -32,7 +32,7 @@ python -m pytest
 | `test_scraper_export_rows.py` | Spreadsheet header and row generation. |
 | `test_scraper_run_history.py` | Previous-run windows, exact posted filtering, historical duplicate keys, and seen-jobs index behavior. |
 | `test_dedupe_matching.py` | Cross-provider matching, blockers, provenance, and historical dedupe identity. |
-| `test_google_sheets.py` | Google auth config, service-account preference, missing credential messages, and OAuth token rewrite permissions. |
+| `test_google_sheets.py` | Google service-account auth config, API service construction, and missing credential messages. |
 | `test_cv_pdf_output.py` | PDF filename sanitization, CV ID assignment, LaTeX compile failures, Drive folder naming, and mocked Drive uploads. |
 | `test_indeed_provider.py` | Indeed actor payloads and normalization. |
 | `test_stepstone_provider.py` | Stepstone actor payloads and normalization. |

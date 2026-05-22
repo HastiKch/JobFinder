@@ -25,26 +25,8 @@ DEFAULT_CV_FILE = PROJECT_ROOT / "cv" / "master_cv.tex"
 DEFAULT_CV_PHOTO_FILE = PROJECT_ROOT / "cv" / "photo.jpg"
 """Default optional CV photo copied into LaTeX compilation directories."""
 
-GOOGLE_OAUTH_CLIENT_SECRET_FILE = PROJECT_ROOT / "google_client_secret.json"
-"""Google OAuth desktop-client credentials file."""
-
-GOOGLE_OAUTH_TOKEN_FILE = PROJECT_ROOT / "google_token.json"
-"""Google OAuth token cache file."""
-
 GOOGLE_SHARED_SERVICE_ACCOUNT_FILE = PROJECT_ROOT / "google_service_account.json"
-"""Shared Google service-account credentials file."""
-
-GOOGLE_SHEETS_SERVICE_ACCOUNT_FILE = PROJECT_ROOT / "google_sheets_service_account.json"
-"""Google Sheets service-account credentials file."""
-
-GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE = PROJECT_ROOT / "google_drive_service_account.json"
-"""Google Drive service-account credentials file."""
-
-GOOGLE_CLIENT_SECRET_FILE = GOOGLE_OAUTH_CLIENT_SECRET_FILE
-"""Backward-compatible alias for the Google OAuth desktop-client file."""
-
-GOOGLE_TOKEN_FILE = GOOGLE_OAUTH_TOKEN_FILE
-"""Backward-compatible alias for the Google OAuth token cache file."""
+"""Shared Google service-account credentials file used for Sheets and Drive."""
 
 GOOGLE_SERVICE_ACCOUNT_FILE = GOOGLE_SHARED_SERVICE_ACCOUNT_FILE
 """Backward-compatible alias for the shared Google service-account file."""

@@ -177,7 +177,7 @@ Common settings:
 The full local pipeline always writes to Google Sheets before evaluating jobs.
 Use the scraper-only command if you only want a local Excel file.
 
-Use a Google service account for Google Sheets access:
+Use one Google service account for both Google Sheets and Google Drive access:
 
 1. Open Google Cloud Console.
 2. Enable the Google Sheets API and Google Drive API.
@@ -189,8 +189,7 @@ Use a Google service account for Google Sheets access:
 8. Share a Google Drive folder named `JobFinder` with that email as Editor, or
    let JobFinder create it for the service account.
 
-Save the downloaded JSON key in this repository as a shared credential when one
-service account should handle both Sheets and Drive fallback access:
+Save the downloaded JSON key in this repository as:
 
 ```text
 google_service_account.json
@@ -203,16 +202,8 @@ If Google downloaded the key with a project-specific name such as
 mv ~/Downloads/jobfinder-*.json google_service_account.json
 ```
 
-For separate service accounts, save the keys as:
-
-```text
-google_sheets_service_account.json
-google_drive_service_account.json
-```
-
-You can also set `GOOGLE_SHEETS_SERVICE_ACCOUNT_FILE`,
-`GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE`, or `GOOGLE_SERVICE_ACCOUNT_FILE` in `.env`
-to point at custom credential paths.
+You can also set `GOOGLE_SERVICE_ACCOUNT_FILE` in `.env` to point at a custom
+service-account key path.
 
 Then set `GOOGLE_SPREADSHEET_ID` in `.env`, or save the spreadsheet ID in:
 
@@ -232,31 +223,8 @@ The spreadsheet ID is:
 1abcDEFghiJKLmnop123
 ```
 
-Do not commit Google credential files or `google_spreadsheet_id.txt`.
-
-Local OAuth with `google_client_secret.json` and `google_token.json` is still
-supported as a fallback, but service-account auth matches the GitHub Actions
-workflow and is simpler to move online later.
-
-For PDF uploads into a normal personal Gmail/Google Drive account, use OAuth for
-Drive because service accounts cannot use your personal Drive storage quota:
-
-1. In Google Cloud, configure the OAuth consent screen and publish it to
-   Production.
-2. Create an OAuth client of type Desktop app.
-3. Download the client JSON as `google_client_secret.json`.
-4. Run:
-
-   ```bash
-   env PYTHONPATH=src python - <<'PY'
-from jobfinder.integrations.google.drive import build_google_drive_service
-
-   build_google_drive_service(error_cls=RuntimeError)
-   print("Created or refreshed google_token.json")
-   PY
-   ```
-
-Do not commit `google_client_secret.json` or `google_token.json`.
+Do not commit Google credential files or `google_spreadsheet_id.txt`. This repo
+uses only the service-account key for Google access.
 
 ## 5. Run A Preflight Check
 
@@ -344,12 +312,10 @@ and should stay local:
 
 ```text
 .env
-google_client_secret.json
 google_service_account*.json
 *service_account*.json
 *service-account*.json
 jobfinder-*.json
-google_token.json
 google_spreadsheet_id.txt
 configs/keywords.txt
 prompts/master_prompt.txt

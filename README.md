@@ -41,7 +41,7 @@ Key capabilities:
 - Deterministic cross-provider deduplication without AI.
 - Historical duplicate suppression through Google Sheets run history.
 - Scheduled and manual GitHub Actions pipeline runs.
-- Service-account Google Sheets integration, with local OAuth fallback.
+- Single service-account Google Sheets and Drive integration.
 - OpenAI-based job-fit evaluation with prompt and CV injection.
 - LaTeX PDF generation for tailored CVs, with Google Drive links in the sheet.
 - Incremental evaluator saves for crash recovery.
@@ -333,7 +333,8 @@ JOB_EVAL_OPENAI_MODEL=gpt-5-mini
 
 ### Google Sheets And Drive Setup
 
-Service-account auth is the preferred path for local and GitHub Actions runs:
+JobFinder uses one permanent Google service account for both Google Sheets and
+Google Drive:
 
 1. Enable the Google Sheets API and Google Drive API in Google Cloud.
 2. Create a service account.
@@ -343,36 +344,12 @@ Service-account auth is the preferred path for local and GitHub Actions runs:
 5. Share an existing Google Drive folder named `JobFinder` with the same service
    account as Editor, or let JobFinder create that folder in the service
    account's Drive.
-6. Save the key locally as `google_service_account.json` when one service
-   account should handle both Sheets and Drive fallback access.
+6. Save the key locally as `google_service_account.json`.
 7. Set `GOOGLE_SPREADSHEET_ID` or save the ID in `google_spreadsheet_id.txt`.
 
-For separate service accounts, save the keys as
-`google_sheets_service_account.json` and `google_drive_service_account.json`.
-These can also be overridden with `GOOGLE_SHEETS_SERVICE_ACCOUNT_FILE`,
-`GOOGLE_DRIVE_SERVICE_ACCOUNT_FILE`, or the shared
-`GOOGLE_SERVICE_ACCOUNT_FILE` path setting.
-
-For a normal personal Gmail/Google Drive account, Drive uploads should use user
-OAuth instead of the service account because service accounts do not have
-personal Drive storage quota. Create an OAuth Desktop client, publish the OAuth
-app to Production, save it as `google_client_secret.json`, and run the Drive
-auth helper once:
-
-```bash
-env PYTHONPATH=src python - <<'PY'
-from jobfinder.integrations.google.drive import build_google_drive_service
-
-build_google_drive_service(error_cls=RuntimeError)
-print("Created or refreshed google_token.json")
-PY
-```
-
-Keep `google_token.json` private. For GitHub Actions, paste its contents into
-the `GOOGLE_DRIVE_TOKEN_JSON` secret.
-
-Local OAuth fallback is still supported through `google_client_secret.json` and
-`google_token.json`, but service-account auth is simpler and matches CI.
+You can point at a differently named service-account key with
+`GOOGLE_SERVICE_ACCOUNT_FILE`, but it is still the same single service-account
+method. No other Google credential files are used by this project.
 
 ## Quick Start
 
@@ -675,7 +652,6 @@ Required GitHub secrets:
 | `OPENAI_API_KEY` | `scrape_and_evaluate` | OpenAI API key. |
 | `GOOGLE_SPREADSHEET_ID` | all runs | Target spreadsheet ID. |
 | `GOOGLE_SERVICE_ACCOUNT_JSON` | all runs | Full service-account JSON key. |
-| `GOOGLE_DRIVE_TOKEN_JSON` | personal Drive PDF uploads | Authorized-user OAuth token JSON from `google_token.json`. |
 | `JOB_KEYWORDS_TEXT` | all runs | Full private keyword file content. |
 | `MASTER_PROMPT_TEXT` | `scrape_and_evaluate` | Full private evaluator prompt. |
 | `MASTER_CV_TEX` | `scrape_and_evaluate` | Full private LaTeX CV. |
@@ -869,12 +845,10 @@ Never commit:
 
 ```text
 .env
-google_client_secret.json
 google_service_account*.json
 *service_account*.json
 *service-account*.json
 jobfinder-*.json
-google_token.json
 google_spreadsheet_id.txt
 configs/keywords.txt
 prompts/master_prompt.txt

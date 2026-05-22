@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -15,13 +13,6 @@ from jobfinder.integrations.google.credentials import (
 
 DEFAULT_GOOGLE_API_TIMEOUT_SECONDS = 120
 DEFAULT_GOOGLE_API_RETRIES = 3
-
-
-def write_private_text_file(path: Path, text: str) -> None:
-    """Write a local credential-like file with restrictive permissions."""
-    path.write_text(text, encoding="utf-8")
-    with suppress(OSError):
-        os.chmod(path, 0o600)
 
 
 def google_api_timeout_seconds(env: EnvSettings | None = None) -> int:
@@ -91,28 +82,19 @@ def build_google_api_service(
     *,
     error_cls: type[RuntimeError],
     service_account_file: Path | None = None,
-    token_file: Path | None = None,
-    client_secret_file: Path | None = None,
     auth_config: GoogleAuthConfig | None = None,
     scopes: list[str],
-    prefer_service_account: bool = True,
 ) -> Any:
-    """Build an authenticated Google API service."""
+    """Build a service-account-authenticated Google API service."""
     credential_files = google_credential_files_for(
         service_name,
         auth_config=auth_config,
         service_account_file=service_account_file,
-        oauth_client_secret_file=client_secret_file,
-        oauth_token_file=token_file,
     )
     service_account_path = credential_files.service_account_file
-    oauth_token_path = credential_files.oauth_token_file
-    oauth_client_secret_path = credential_files.oauth_client_secret_file
 
     try:
-        from google.auth.transport.requests import Request
         from google.oauth2 import service_account
-        from google.oauth2.credentials import Credentials
         from googleapiclient.discovery import build
     except ImportError as exc:
         raise error_cls(
@@ -120,62 +102,17 @@ def build_google_api_service(
             "python -m pip install -r requirements.txt"
         ) from exc
 
-    if prefer_service_account and service_account_path.exists():
-        creds = service_account.Credentials.from_service_account_file(
-            str(service_account_path), scopes=scopes
-        )
-        return build_google_service(
-            build,
-            service_name,
-            version,
-            creds,
-            error_cls=error_cls,
+    if not service_account_path.exists():
+        raise error_cls(
+            f"Missing {service_account_path.name}. Create a Google service account, "
+            "download its JSON key, save it as google_service_account.json or set "
+            "GOOGLE_SERVICE_ACCOUNT_FILE, then share the target Google Sheet and "
+            "Drive folder with the service-account email as Editor."
         )
 
-    creds = None
-    if oauth_token_path.exists():
-        creds = Credentials.from_authorized_user_file(str(oauth_token_path), scopes)
-        if not creds.has_scopes(scopes):
-            creds = None
-
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            if not oauth_client_secret_path.exists():
-                if not prefer_service_account and service_account_path.exists():
-                    creds = service_account.Credentials.from_service_account_file(
-                        str(service_account_path), scopes=scopes
-                    )
-                    return build_google_service(
-                        build,
-                        service_name,
-                        version,
-                        creds,
-                        error_cls=error_cls,
-                    )
-                raise error_cls(
-                    f"Missing {service_account_path.name}. Create a Google service "
-                    "account, download its JSON key, save it in this folder, and "
-                    "share the target spreadsheet or Drive folder with the "
-                    "service-account email. "
-                    f"For local OAuth fallback, create {oauth_client_secret_path.name} "
-                    "instead."
-                )
-            try:
-                from google_auth_oauthlib.flow import InstalledAppFlow
-            except ImportError as exc:
-                raise error_cls(
-                    "Missing Google OAuth packages for local browser auth. Install "
-                    "dependencies with: python -m pip install -r requirements.txt"
-                ) from exc
-
-            flow = InstalledAppFlow.from_client_secrets_file(
-                str(oauth_client_secret_path), scopes
-            )
-            creds = flow.run_local_server(port=0)
-
-        write_private_text_file(oauth_token_path, creds.to_json())
+    creds = service_account.Credentials.from_service_account_file(
+        str(service_account_path), scopes=scopes
+    )
 
     return build_google_service(
         build,
