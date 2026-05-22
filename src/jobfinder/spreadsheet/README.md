@@ -23,7 +23,7 @@ src/jobfinder/spreadsheet/schema.py
 ## Current Final AI Columns
 
 - `AI Verdict`
-- `AI Fit Score`
+- `AI Fit Score` (0-26)
 - `AI Unsuitable Reasons`
 - `AI CV PDF`
 

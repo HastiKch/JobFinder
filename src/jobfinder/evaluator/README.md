@@ -86,7 +86,7 @@ the first lines:
 
 ```text
 Verdict: <Suitable | Not Suitable>
-Fit Score: <integer>%
+Fit Score: <integer from 0 to 26>
 Unsuitable Reasons: <category labels only when Not Suitable, otherwise blank>
 ```
 
@@ -96,7 +96,7 @@ The final evaluator columns are defined in `spreadsheet/schema.py` and imported
 through `models.py`:
 
 - `AI Verdict`
-- `AI Fit Score`
+- `AI Fit Score` (0-26)
 - `AI Unsuitable Reasons`
 - `AI CV PDF`
 

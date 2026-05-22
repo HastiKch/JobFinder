@@ -20,7 +20,9 @@ from jobfinder.evaluator.models import (
 LOGGER = logging.getLogger("job_fit_evaluator")
 
 VERDICT_RE = re.compile(r"(?im)^\s*Verdict\s*:\s*(?P<value>.+?)\s*$")
-FIT_SCORE_RE = re.compile(r"(?im)^\s*Fit\s+Score\s*:\s*(?P<score>\d{1,3})\s*%")
+FIT_SCORE_RE = re.compile(
+    r"(?im)^\s*Fit\s+Score\s*:\s*(?P<score>\d{1,2})(?:\s*(?:points?|/26|%))?\s*$"
+)
 UNSUITABLE_REASONS_LABEL_RE = re.compile(
     r"(?i)^(?:\d+\.\s*)?unsuitable\s+reasons?\s*:\s*(?P<value>.*)$"
 )
@@ -568,7 +570,7 @@ def parse_model_response(
     except ValueError:
         score = -1
 
-    if verdict is None or not 0 <= score <= 100:
+    if verdict is None or not 0 <= score <= 26:
         return JobEvaluation(
             row_number=row_number,
             verdict="Error",

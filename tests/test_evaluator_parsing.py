@@ -108,7 +108,7 @@ def test_extract_job_records_skips_suitable_rows_with_pdf_link_without_cv():
 def test_parse_model_response_extracts_verdict_score_reason_and_cv():
     """Machine-readable model responses should parse into evaluator fields."""
     response = """Verdict: Suitable
-Fit Score: 88%
+Fit Score: 22
 
 Strong GIS/Python match.
 
@@ -121,7 +121,7 @@ Customized CV (LaTeX):
     result = parse_model_response(response, row_number=7, model="test-model")
 
     assert result.verdict == "Suitable"
-    assert result.fit_score == 88
+    assert result.fit_score == 22
     assert result.reason == "Strong GIS/Python match."
     assert result.tailored_cv == r"\section{Experience}"
     assert result.value_for_column("AI Unsuitable Reasons") == ""
@@ -130,13 +130,14 @@ Customized CV (LaTeX):
 def test_parse_model_response_extracts_unsuitable_reasons_for_rejected_jobs():
     """Not-suitable rows should expose rejection reasons in the dedicated column."""
     response = """Verdict: Not Suitable
-Fit Score: 28%
+Fit Score: 5
 Unsuitable Reasons: Requires fluent German and senior cloud architecture experience.
 """
 
     result = parse_model_response(response, row_number=8, model="test-model")
 
     assert result.verdict == "Not Suitable"
+    assert result.fit_score == 5
     assert result.reason == (
         "Requires fluent German and senior cloud architecture experience."
     )

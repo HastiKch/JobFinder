@@ -635,7 +635,7 @@ Stable scraper columns:
 | `Job URL` | Spreadsheet hyperlink to the posting. |
 | `Apply URL` | Spreadsheet hyperlink to the external application URL when available. |
 | `AI Verdict` | Filled by evaluator. |
-| `AI Fit Score` | Filled by evaluator. |
+| `AI Fit Score` | Filled by evaluator using the 0-26 job-fit scoring rubric. |
 | `AI Unsuitable Reasons` | Filled for rejected rows. |
 | `AI Tailored CV` | Temporary tailored LaTeX CV content; removed during final cleanup when PDF output is enabled. |
 | `AI CV PDF` | Google Drive PDF link, or a compile/upload error for that row. |

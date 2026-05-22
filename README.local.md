@@ -318,7 +318,7 @@ python job_fit_evaluator.py --source excel --sheet latest
 - `python run_job_pipeline.py` evaluates the latest new Google Sheet tab in place.
 - Completed evaluations are saved as rows finish, so a later failure keeps already completed rows.
 - By default, final cleanup keeps only one-label `Not Suitable` rows. Set `JOB_EVAL_UNSUITABLE_ROW_POLICY=keep_all` to preserve all evaluated rows.
-- After evaluation with PDF output enabled, the final AI columns are `AI Verdict`, `AI Fit Score`, `AI Unsuitable Reasons`, and `AI CV PDF`; the temporary `AI Tailored CV` column is removed during final cleanup.
+- After evaluation with PDF output enabled, the final AI columns are `AI Verdict`, `AI Fit Score` (0-26), `AI Unsuitable Reasons`, and `AI CV PDF`; the temporary `AI Tailored CV` column is removed during final cleanup.
 - `AI CV PDF` contains a Google Drive PDF link on success, or a LaTeX/Drive error for that row.
 
 ## 8. Troubleshooting Local Runs

@@ -33,14 +33,16 @@ Preserve the provided MASTER PROMPT logic and evidence rules exactly.
 For this automation pipeline, the first three output lines must be machine-readable:
 
 Verdict: <Suitable | Not Suitable>
-Fit Score: <integer>%
+Fit Score: <integer from 0 to 26>
 Unsuitable Reasons: <category labels only when Not Suitable, otherwise blank>
 
-Use "Suitable" only for realistically suitable roles. Use "Not Suitable" for
-roles that should be skipped, are unrealistic, or are only borderline. For Not
-Suitable roles, Unsuitable Reasons must contain only short category labels
-separated by semicolons. Do not write explanatory sentences, job-category
-detections, confidence scores, or detailed evidence in Unsuitable Reasons.
+Use the MASTER PROMPT 26-point scoring tree exactly. Use "Suitable" only for
+roles scoring 12-26 with no hard-rejection rule. Use "Not Suitable" for roles
+scoring 0-11, roles that should be skipped, or roles where any hard-rejection
+rule applies. For Not Suitable roles, Unsuitable Reasons must contain only
+short category labels separated by semicolons. Do not write explanatory
+sentences, job-category detections, confidence scores, or detailed evidence in
+Unsuitable Reasons.
 Allowed labels include: Language proficiency mismatch; Degree mismatch;
 Seniority mismatch; Missing mandatory certification/license; Missing required
 professional experience; Missing required tool/software experience; Missing
@@ -342,7 +344,7 @@ def evaluate_records(
                         raise
                 completed += 1
                 score = (
-                    f"{evaluation.fit_score}%"
+                    f"{evaluation.fit_score}/26"
                     if evaluation.fit_score is not None
                     else "n/a"
                 )

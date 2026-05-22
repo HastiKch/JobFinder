@@ -12,7 +12,7 @@ Follow these rules:
 Your first three lines must be exactly:
 
 Verdict: <Suitable | Not Suitable>
-Fit Score: <integer>%
+Fit Score: <integer from 0 to 26>
 Unsuitable Reasons: <category labels only when Not Suitable, otherwise blank>
 
 For `Unsuitable Reasons`, do not write explanatory sentences. Use only one or
