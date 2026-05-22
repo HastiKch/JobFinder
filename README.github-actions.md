@@ -35,10 +35,9 @@ runs, central logs, and private values stored as GitHub repository secrets.
 - A GitHub repository with Actions enabled.
 - An Apify API token.
 - An OpenAI API key when using `scrape_and_evaluate`.
-- A Google service account JSON key.
-- A Google Sheet shared with the service-account email as Editor.
-- A Google Drive authorized-user token JSON from the account that should own
-  uploaded CV PDFs.
+- A Google authorized-user token JSON from the account that should own Sheets
+  and uploaded CV PDFs.
+- A Google Drive folder ID for generated CV PDF uploads.
 - Private keyword, prompt, and CV content ready to paste into repository secrets.
 
 ## How The Workflow Runs
@@ -101,36 +100,28 @@ The spreadsheet ID is:
 
 This value goes into the GitHub secret `GOOGLE_SPREADSHEET_ID`.
 
-## 3. Create A Google Service Account
+## 3. Create A Google OAuth Token
 
-Use a Google service account for Google Sheets in GitHub Actions.
-
-1. Open Google Cloud Console.
-2. Enable the Google Sheets API and Google Drive API.
-3. Go to `IAM & Admin -> Service Accounts`.
-4. Create a service account.
-5. Create and download a JSON key for that service account.
-6. Copy the `client_email` value from the JSON key.
-7. Open your target Google Sheet and share it with that email as Editor.
-
-Copy the full JSON key into the GitHub secret:
-
-```text
-GOOGLE_SERVICE_ACCOUNT_JSON
-```
-
-## 4. Create A Google Drive Token
-
-Use an authorized-user token for Google Drive PDF uploads. This avoids the
-service-account Drive storage-quota error and, when the OAuth app is published
-to Production, does not expire weekly.
+Use the same authorized-user token for Google Sheets and Google Drive.
 
 If you do not already have `google_token.json`, follow the local setup in
 [README.local.md](README.local.md) once. Then copy the full file contents into
 the GitHub secret:
 
 ```text
-GOOGLE_DRIVE_TOKEN_JSON
+GOOGLE_TOKEN_JSON
+```
+
+The token account must own or have edit access to the target Google Sheet and
+the Drive folder used for generated PDFs.
+
+## 4. Choose A Google Drive Folder
+
+Create or choose the Drive folder that should contain timestamped PDF run
+folders. Copy the folder ID from its Drive URL and save it in:
+
+```text
+JOB_EVAL_CV_DRIVE_FOLDER_ID
 ```
 
 ## 5. Prepare Private Content
@@ -153,8 +144,7 @@ cp cv/master_cv.example.tex cv/master_cv.tex
 | `prompts/master_prompt.txt` | `MASTER_PROMPT_TEXT` |
 | `cv/master_cv.tex` | `MASTER_CV_TEX` |
 | `cv/photo.jpg` | `CV_PHOTO_BASE64` (optional, base64 encoded) |
-| `google_service_account.json` | `GOOGLE_SERVICE_ACCOUNT_JSON` |
-| `google_token.json` | `GOOGLE_DRIVE_TOKEN_JSON` |
+| `google_token.json` | `GOOGLE_TOKEN_JSON` |
 
 On macOS, copy each value like this:
 
@@ -162,7 +152,6 @@ On macOS, copy each value like this:
 pbcopy < configs/keywords.txt
 pbcopy < prompts/master_prompt.txt
 pbcopy < cv/master_cv.tex
-pbcopy < google_service_account.json
 pbcopy < google_token.json
 ```
 
@@ -190,8 +179,8 @@ Add these secrets exactly:
 | `APIFY_API_TOKEN` | All runs | One Apify API token, or 1 to 12 tokens separated by `;`, for example `apify_api_1;apify_api_2;apify_api_3`. |
 | `OPENAI_API_KEY` | `scrape_and_evaluate` | Your OpenAI API key, for example `sk-...` or `sk-proj-...`. |
 | `GOOGLE_SPREADSHEET_ID` | All runs | The spreadsheet ID from the Google Sheet URL. |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | All runs | The full contents of the service-account JSON key for Google Sheets. |
-| `GOOGLE_DRIVE_TOKEN_JSON` | `scrape_and_evaluate` | The full contents of `google_token.json` for Drive PDF uploads. |
+| `GOOGLE_TOKEN_JSON` | All runs | The full contents of `google_token.json` for Sheets and Drive. |
+| `JOB_EVAL_CV_DRIVE_FOLDER_ID` | `scrape_and_evaluate` | The Drive folder ID for generated CV PDF run folders. |
 | `JOB_KEYWORDS_TEXT` | All runs | The full contents of `configs/keywords.txt`. |
 | `MASTER_PROMPT_TEXT` | `scrape_and_evaluate` | The full contents of `prompts/master_prompt.txt`. |
 | `MASTER_CV_TEX` | `scrape_and_evaluate` | The full contents of `cv/master_cv.tex`. |
@@ -356,18 +345,17 @@ Use GitHub secrets for private values:
 | CV content | `MASTER_CV_TEX` |
 | Private CV photo | `CV_PHOTO_BASE64` |
 | API keys | `APIFY_API_TOKEN`, `OPENAI_API_KEY` |
-| Google Sheets access | `GOOGLE_SPREADSHEET_ID`, `GOOGLE_SERVICE_ACCOUNT_JSON` |
-| Google Drive PDF uploads | `GOOGLE_DRIVE_TOKEN_JSON` |
+| Google Sheets access | `GOOGLE_SPREADSHEET_ID`, `GOOGLE_TOKEN_JSON` |
+| Google Drive PDF uploads | `GOOGLE_TOKEN_JSON`, `JOB_EVAL_CV_DRIVE_FOLDER_ID` |
 
 ## Troubleshooting GitHub Actions
 
 | Problem | What to check |
 |---|---|
 | `Missing repository secret ...` | Add the named secret under GitHub repo settings. |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` error | Copy the full service-account JSON key downloaded from Google Cloud. |
-| `GOOGLE_DRIVE_TOKEN_JSON` error | Copy the full authorized-user token JSON from `google_token.json`. |
-| Google Sheets authentication fails | Confirm the spreadsheet is shared with the service-account `client_email` as Editor. |
-| Drive PDF links fail | Enable Google Drive API, confirm the OAuth app is published to Production, and recreate `google_token.json` with Drive access. |
+| `GOOGLE_TOKEN_JSON` error | Copy the full authorized-user token JSON from `google_token.json`. |
+| Google Sheets authentication fails | Enable Sheets and Drive APIs, confirm the token account can access the spreadsheet, and recreate `google_token.json` if scopes changed. |
+| Drive PDF links fail | Set `JOB_EVAL_CV_DRIVE_FOLDER_ID`, confirm the folder is accessible to the token account, enable Drive API, and recreate `google_token.json` if scopes changed. |
 | `LaTeX compilation failed` in `AI CV PDF` | Check that `latexmk`/`xelatex` installed, the generated LaTeX is valid, and any referenced photo is available through committed `cv/photo.jpg` or `CV_PHOTO_BASE64`. |
 | Spreadsheet not found | Check that `GOOGLE_SPREADSHEET_ID` is only the ID, not the full URL. |
 | Workflow cannot push or fetch repo | Check GitHub authentication and repository permissions. |
@@ -382,5 +370,5 @@ Use GitHub secrets for private values:
 Use GitHub repository secrets for all private online values. Never commit API
 keys, Google credentials, real keywords, prompts, or CV content.
 
-If you expose a service-account JSON key, delete that key in Google Cloud and
-create a fresh one before using it in GitHub.
+If you expose `google_token.json`, revoke the OAuth grant in your Google
+Account security settings, create a fresh token, and update the GitHub secret.

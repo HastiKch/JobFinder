@@ -40,6 +40,14 @@ def run_preflight(env: EnvSettings, *, should_evaluate: bool) -> PreflightResult
         read_text_asset(cv_file, "LaTeX CV")
         if not env.get("OPENAI_API_KEY"):
             raise RuntimeError("Missing OPENAI_API_KEY.")
+        if env.get_bool("JOB_EVAL_CV_PDF_OUTPUT", True) and not env.get(
+            "JOB_EVAL_CV_DRIVE_FOLDER_ID"
+        ):
+            raise RuntimeError(
+                "Missing JOB_EVAL_CV_DRIVE_FOLDER_ID. Set it to the ID of the "
+                "Google Drive folder where generated CV PDFs should be uploaded, "
+                "or set JOB_EVAL_CV_PDF_OUTPUT=false."
+            )
         read_google_spreadsheet_id(env.get("JOB_EVAL_GOOGLE_SPREADSHEET_ID"))
         evaluation_inputs_ready = True
 

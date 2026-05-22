@@ -245,19 +245,27 @@ def read_google_input(
     requested_sheet: str,
 ) -> tuple[str, list[str], list[list[Any]]]:
     """Read headers and rows from a Google Sheet tab."""
-    metadata = google_execute(
-        service.spreadsheets().get(
-            spreadsheetId=spreadsheet_id,
-            fields="sheets(properties(title))",
+    try:
+        metadata = google_execute(
+            service.spreadsheets().get(
+                spreadsheetId=spreadsheet_id,
+                fields="sheets(properties(title))",
+            )
         )
-    )
-    sheet_names = [sheet["properties"]["title"] for sheet in metadata.get("sheets", [])]
-    sheet_name = resolve_sheet_name(sheet_names, requested_sheet)
-    response = google_execute(
-        service.spreadsheets()
-        .values()
-        .get(spreadsheetId=spreadsheet_id, range=quote_sheet_name(sheet_name))
-    )
+        sheet_names = [
+            sheet["properties"]["title"] for sheet in metadata.get("sheets", [])
+        ]
+        sheet_name = resolve_sheet_name(sheet_names, requested_sheet)
+        response = google_execute(
+            service.spreadsheets()
+            .values()
+            .get(spreadsheetId=spreadsheet_id, range=quote_sheet_name(sheet_name))
+        )
+    except Exception as exc:
+        raise GoogleSheetsError(
+            f"Could not read Google spreadsheet ID '{spreadsheet_id}'. Details: {exc}"
+        ) from exc
+
     values = response.get("values", [])
     if not values:
         raise EvaluationError(f"Google Sheet tab '{sheet_name}' is empty.")
@@ -282,54 +290,59 @@ def write_google_output(
     remove_tailored_cv: bool = False,
 ) -> None:
     """Write evaluator columns and results back to a Google Sheet tab."""
-    data = []
-    for column in OUTPUT_COLUMNS:
-        column_idx = header_map[normalize_header(column)]
-        column_letter = get_column_letter(column_idx + 1)
-        data.append(
-            {
-                "range": f"{quote_sheet_name(sheet_name)}!{column_letter}1",
-                "values": [[headers[column_idx]]],
-            }
-        )
-        data.extend(
-            {
-                "range": (
-                    f"{quote_sheet_name(sheet_name)}!"
-                    f"{column_letter}{evaluation.row_number}"
-                ),
-                "values": [[evaluation.value_for_column(column)]],
-            }
-            for evaluation in evaluations.values()
-        )
-
-    for idx in range(0, len(data), GOOGLE_BATCH_REQUEST_CHUNK_SIZE):
-        google_execute(
-            service.spreadsheets()
-            .values()
-            .batchUpdate(
-                spreadsheetId=spreadsheet_id,
-                body={
-                    "valueInputOption": "RAW",
-                    "data": data[idx : idx + GOOGLE_BATCH_REQUEST_CHUNK_SIZE],
-                },
+    try:
+        data = []
+        for column in OUTPUT_COLUMNS:
+            column_idx = header_map[normalize_header(column)]
+            column_letter = get_column_letter(column_idx + 1)
+            data.append(
+                {
+                    "range": f"{quote_sheet_name(sheet_name)}!{column_letter}1",
+                    "values": [[headers[column_idx]]],
+                }
             )
-        )
+            data.extend(
+                {
+                    "range": (
+                        f"{quote_sheet_name(sheet_name)}!"
+                        f"{column_letter}{evaluation.row_number}"
+                    ),
+                    "values": [[evaluation.value_for_column(column)]],
+                }
+                for evaluation in evaluations.values()
+            )
 
-    if cleanup_columns:
-        if remove_rejected_rows:
-            remove_google_rows_after_evaluation(
+        for idx in range(0, len(data), GOOGLE_BATCH_REQUEST_CHUNK_SIZE):
+            google_execute(
+                service.spreadsheets()
+                .values()
+                .batchUpdate(
+                    spreadsheetId=spreadsheet_id,
+                    body={
+                        "valueInputOption": "RAW",
+                        "data": data[idx : idx + GOOGLE_BATCH_REQUEST_CHUNK_SIZE],
+                    },
+                )
+            )
+
+        if cleanup_columns:
+            if remove_rejected_rows:
+                remove_google_rows_after_evaluation(
+                    service,
+                    spreadsheet_id,
+                    sheet_name,
+                )
+            remove_google_columns_after_evaluation(
                 service,
                 spreadsheet_id,
                 sheet_name,
+                headers,
+                remove_tailored_cv=remove_tailored_cv,
             )
-        remove_google_columns_after_evaluation(
-            service,
-            spreadsheet_id,
-            sheet_name,
-            headers,
-            remove_tailored_cv=remove_tailored_cv,
-        )
+    except Exception as exc:
+        raise GoogleSheetsError(
+            f"Could not write Google spreadsheet ID '{spreadsheet_id}'. Details: {exc}"
+        ) from exc
 
 
 def get_google_sheet_id(service: Any, spreadsheet_id: str, sheet_name: str) -> int:

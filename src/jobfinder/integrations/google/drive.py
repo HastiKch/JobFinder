@@ -10,10 +10,13 @@ from jobfinder.integrations.google.client import (
     build_google_drive_oauth_service,
     google_execute,
 )
-from jobfinder.integrations.google.credentials import GoogleAuthConfig
+from jobfinder.integrations.google.credentials import (
+    GOOGLE_OAUTH_SCOPES,
+    GoogleAuthConfig,
+)
 
-GOOGLE_DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
-"""Google API scopes required to create folders and upload PDFs to Google Drive."""
+GOOGLE_DRIVE_SCOPES = GOOGLE_OAUTH_SCOPES
+"""Google OAuth scopes required to create folders and upload PDFs to Drive."""
 
 DRIVE_FOLDER_MIME_TYPE = "application/vnd.google-apps.folder"
 
@@ -40,13 +43,15 @@ def build_google_drive_service(
     *,
     error_cls: type[RuntimeError],
     token_file: Path | None = None,
+    client_secret_file: Path | None = None,
     auth_config: GoogleAuthConfig | None = None,
 ) -> Any:
-    """Build an authorized-user Google Drive API service."""
+    """Build an OAuth-authenticated Google Drive API service."""
     return build_google_drive_oauth_service(
         "v3",
         error_cls=error_cls,
         token_file=token_file,
+        client_secret_file=client_secret_file,
         auth_config=auth_config,
         scopes=GOOGLE_DRIVE_SCOPES,
     )
@@ -122,6 +127,46 @@ def create_drive_folder(
     return DriveFolder(
         id=str(response["id"]),
         name=str(response.get("name", name)),
+        web_view_link=str(response.get("webViewLink", "")),
+    )
+
+
+def get_drive_folder(service: Any, folder_id: str) -> DriveFolder:
+    """Return a Drive folder by ID, raising a clear error when it is unusable."""
+    normalized_folder_id = folder_id.strip()
+    if not normalized_folder_id:
+        raise RuntimeError(
+            "Missing Google Drive folder ID. Set JOB_EVAL_CV_DRIVE_FOLDER_ID to "
+            "the ID of the Drive folder where JobFinder should create timestamped "
+            "PDF run folders."
+        )
+
+    try:
+        response = google_execute(
+            service.files().get(
+                fileId=normalized_folder_id,
+                fields="id,name,mimeType,webViewLink",
+                supportsAllDrives=True,
+            ),
+            retries=0,
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            f"Could not access Google Drive folder ID '{normalized_folder_id}'. "
+            "Check that the ID is a folder in the authorized user's Drive account "
+            "or a folder shared with that account, and that the Drive API is "
+            f"enabled. Details: {exc}"
+        ) from exc
+
+    if response.get("mimeType") != DRIVE_FOLDER_MIME_TYPE:
+        raise RuntimeError(
+            f"Google Drive ID '{normalized_folder_id}' is not a folder. Set "
+            "JOB_EVAL_CV_DRIVE_FOLDER_ID to a folder ID from a Drive URL."
+        )
+
+    return DriveFolder(
+        id=str(response["id"]),
+        name=str(response.get("name", normalized_folder_id)),
         web_view_link=str(response.get("webViewLink", "")),
     )
 

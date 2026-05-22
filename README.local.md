@@ -36,8 +36,8 @@ while the job is running.
 - `latexmk` and `xelatex` when running evaluation with PDF output enabled.
 - An Apify API token.
 - An OpenAI API key when running evaluation.
-- A Google service account and Google Sheet when using the full pipeline.
-- A Google Drive authorized-user token when saving generated CV PDFs.
+- Google OAuth Desktop client credentials and a one-time browser authorization
+  for the account that should own Sheets and uploaded PDFs.
 - A local clone of this repository.
 
 Run all commands from the repository root.
@@ -166,7 +166,7 @@ Common settings:
 | `JOB_EVAL_CV_PDF_OUTPUT` | `true` | Compile generated LaTeX CVs to PDFs and save them to Google Drive. |
 | `JOB_EVAL_CV_PHOTO_FILE` | `cv/photo.jpg` | Optional photo copied into each temporary LaTeX build directory. |
 | `JOB_EVAL_CV_PDF_TIMEOUT` | `120` | Max seconds per LaTeX compilation. |
-| `JOB_EVAL_CV_DRIVE_PARENT_FOLDER` | `JobFinder` | Google Drive parent folder for timestamped run folders. |
+| `JOB_EVAL_CV_DRIVE_FOLDER_ID` | blank | Google Drive folder ID for timestamped PDF run folders. Required when PDF output is enabled. |
 | `JOB_EVAL_CV_PDF_APPLICANT_NAME` | `Applicant` | Applicant name used in upload-safe PDF filenames like `12_CV_Applicant_GIS_Analyst_Acme.pdf`. |
 | `JOB_EVAL_LARGE_QUEUE_THRESHOLD` | `200` | Enable request pacing when more than this many rows are queued for OpenAI. |
 | `JOB_EVAL_LARGE_QUEUE_SLEEP_MS` | `2000` | Milliseconds to wait between OpenAI request starts for large queues. |
@@ -178,31 +178,31 @@ Common settings:
 The full local pipeline always writes to Google Sheets before evaluating jobs.
 Use the scraper-only command if you only want a local Excel file.
 
-Use a Google service account for Google Sheets:
+Use Google OAuth for Google Sheets and Google Drive:
 
 1. Open Google Cloud Console.
 2. Enable the Google Sheets API and Google Drive API.
-3. Go to `IAM & Admin -> Service Accounts`.
-4. Create a service account.
-5. Create and download a JSON key for that service account.
-6. Copy the `client_email` value from the JSON key.
-7. Open your target Google Sheet and share it with that email as Editor.
-
-Save the downloaded JSON key in this repository as:
-
-```text
-google_service_account.json
-```
-
-If Google downloaded the key with a project-specific name such as
-`jobfinder-495809-abc123.json`, rename it:
+3. Open the OAuth consent screen and publish the app to Production. Testing-mode
+   refresh tokens can expire after 7 days.
+4. Create an OAuth client of type Desktop app.
+5. Download the client JSON locally as `google_client_secret.json`.
+6. Run the one-time authorization command below. Your browser will ask for
+   Sheets and Drive access, then JobFinder saves `google_token.json`.
 
 ```bash
-mv ~/Downloads/jobfinder-*.json google_service_account.json
+python -m jobfinder.google_auth
 ```
 
-You can also set `GOOGLE_SERVICE_ACCOUNT_FILE` in `.env` to point at a custom
-service-account key path.
+If you have not installed the package, run the module with `PYTHONPATH`:
+
+```bash
+env PYTHONPATH=src python -m jobfinder.google_auth
+```
+
+`google_token.json` is the shared OAuth token JobFinder uses locally for Sheets
+and Drive. It is refreshed automatically on later runs. The temporary
+`google_client_secret.json` file is only needed to create or recreate that
+token.
 
 Then set `GOOGLE_SPREADSHEET_ID` in `.env`, or save the spreadsheet ID in:
 
@@ -222,37 +222,18 @@ The spreadsheet ID is:
 1abcDEFghiJKLmnop123
 ```
 
-Use an authorized-user token for Google Drive PDF uploads:
+If `GOOGLE_SPREADSHEET_ID` is blank, Google Sheets output creates a new `jobs`
+spreadsheet in the authorized user's Drive account and saves its ID in:
 
-1. In Google Cloud, open the OAuth consent screen.
-2. Set the app publishing status to Production. Testing-mode refresh tokens
-   expire after 7 days.
-3. Create an OAuth client of type Desktop app.
-4. Download the client JSON locally as `google_client_secret.json`.
-5. Run this once from the repository:
+```text
+google_spreadsheet_id.txt
+```
 
-   ```bash
-   env PYTHONPATH=src python - <<'PY'
-from pathlib import Path
+For generated CV PDFs, create or choose a Drive folder and set its folder ID:
 
-from google_auth_oauthlib.flow import InstalledAppFlow
-
-from jobfinder.integrations.google.client import write_private_text_file
-from jobfinder.integrations.google.drive import GOOGLE_DRIVE_SCOPES
-
-flow = InstalledAppFlow.from_client_secrets_file(
-    "google_client_secret.json",
-    GOOGLE_DRIVE_SCOPES,
-)
-creds = flow.run_local_server(port=0, prompt="consent")
-write_private_text_file(Path("google_token.json"), creds.to_json())
-print("Created google_token.json")
-PY
-   ```
-
-`google_token.json` is the Drive credential JobFinder uses locally. The
-temporary `google_client_secret.json` file is only needed to create or recreate
-that token.
+```bash
+JOB_EVAL_CV_DRIVE_FOLDER_ID=1abcDEFghiJKLmnop123FolderId
+```
 
 Do not commit Google credential files or `google_spreadsheet_id.txt`.
 
@@ -325,8 +306,8 @@ python job_fit_evaluator.py --source excel --sheet latest
 |---|---|
 | `Missing required setting(s): APIFY_API_TOKEN` | Add `APIFY_API_TOKEN` to `.env` or your shell environment. |
 | `Missing required setting(s): OPENAI_API_KEY` | Add `OPENAI_API_KEY`, or run with `--mode scrape_only`. |
-| Google Sheets authentication fails | Confirm `google_service_account.json` is a service-account key and the sheet is shared with its `client_email` as Editor. |
-| PDF upload fails | Confirm `google_token.json` exists, the Drive API is enabled, and the OAuth app is published to Production. |
+| Google Sheets authentication fails | Confirm `google_token.json` exists, Sheets and Drive APIs are enabled, and the token belongs to the account that owns or can access the sheet. |
+| PDF upload fails | Confirm `JOB_EVAL_CV_DRIVE_FOLDER_ID` is set, the folder is accessible to the authorized account, Drive API is enabled, and the OAuth app is published to Production. |
 | `LaTeX compilation failed` in `AI CV PDF` | Install `latexmk` and `xelatex`, check the generated LaTeX, and make sure `JOB_EVAL_CV_PHOTO_FILE` points to any referenced photo. |
 | Spreadsheet not found | Check that `GOOGLE_SPREADSHEET_ID` is only the spreadsheet ID, not the full URL. |
 | Scraper writes Excel but pipeline fails | The full pipeline forces Google Sheets; complete the Google Sheets setup first. |
@@ -343,11 +324,16 @@ and should stay local:
 ```text
 .env
 google_client_secret.json
+google_client_secret*.json
+*client_secret*.json
+*client-secret*.json
 google_service_account*.json
 *service_account*.json
 *service-account*.json
 jobfinder-*.json
 google_token.json
+google_token*.json
+*google_token*.json
 google_spreadsheet_id.txt
 configs/keywords.txt
 prompts/master_prompt.txt
@@ -355,5 +341,5 @@ cv/master_cv.tex
 cv/photo.jpg  # unless intentionally public
 ```
 
-If you expose a service-account JSON key, delete that key in Google Cloud and
-create a fresh one before using JobFinder again.
+If you expose `google_token.json`, revoke the OAuth grant in your Google
+Account security settings, delete the local token, and authorize again.

@@ -41,6 +41,17 @@ class FakeDriveFiles:
         self.service.lists.append(kwargs)
         return FakeRequest({"files": []})
 
+    def get(self, **kwargs: Any) -> FakeRequest:
+        self.service.gets.append(kwargs)
+        return FakeRequest(
+            {
+                "id": kwargs["fileId"],
+                "name": "JobFinder PDFs",
+                "mimeType": "application/vnd.google-apps.folder",
+                "webViewLink": f"https://drive.example/{kwargs['fileId']}",
+            }
+        )
+
     def create(self, **kwargs: Any) -> FakeRequest:
         body = kwargs["body"]
         self.service.creates.append(kwargs)
@@ -58,6 +69,7 @@ class FakeDriveService:
     """Small fake for the Google Drive service surface used by PDF output."""
 
     def __init__(self) -> None:
+        self.gets: list[dict[str, Any]] = []
         self.lists: list[dict[str, Any]] = []
         self.creates: list[dict[str, Any]] = []
 
@@ -182,6 +194,7 @@ def test_generate_cv_pdf_outputs_creates_drive_folder_and_links(tmp_path):
         records,
         evaluations,
         drive_service=service,
+        parent_folder_id="parent-folder-id",
         now=datetime(2026, 5, 20, 9, 8, 7),
         compile_latex=fake_compile,
         upload_pdf=fake_upload,
@@ -192,9 +205,27 @@ def test_generate_cv_pdf_outputs_creates_drive_folder_and_links(tmp_path):
     }
     assert result.success_count == 1
     assert result.error_count == 0
+    assert service.gets[0]["fileId"] == "parent-folder-id"
     assert [call["body"]["name"] for call in service.creates] == [
-        "JobFinder",
         "2026-05-20_09-08-07",
     ]
-    assert uploads[0][1] == "folder-2"
+    assert service.creates[0]["body"]["parents"] == ["parent-folder-id"]
+    assert uploads[0][1] == "folder-1"
     assert uploads[0][2] == "2_CV_Applicant_GIS_Analyst_Acme.pdf"
+
+
+def test_generate_cv_pdf_outputs_requires_drive_folder_id():
+    """PDF output should clearly report a missing Drive folder ID."""
+    records = [JobRecord(2, "GIS Analyst / Acme", "Job Title: GIS Analyst")]
+    evaluations = {2: JobEvaluation(2, "Suitable", 90, "Match", tailored_cv=LATEX_CV)}
+
+    result = generate_cv_pdf_outputs(
+        records,
+        evaluations,
+        drive_service=FakeDriveService(),
+    )
+
+    assert result.success_count == 0
+    assert result.error_count == 1
+    assert "Missing Google Drive folder ID" in result.outputs[2]
+    assert "JOB_EVAL_CV_DRIVE_FOLDER_ID" in result.outputs[2]

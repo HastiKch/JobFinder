@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import json
 import os
+from collections.abc import Iterable
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
 from jobfinder.env import EnvSettings
 from jobfinder.integrations.google.credentials import (
+    GOOGLE_OAUTH_SCOPES,
     GoogleAuthConfig,
     google_credential_files_for,
 )
@@ -49,6 +52,55 @@ def google_execute(request: Any, *, retries: int | None = None) -> Any:
         if "num_retries" not in str(exc):
             raise
         return request.execute()
+    except Exception as exc:
+        message = google_api_error_message(exc)
+        if not message:
+            raise
+        raise RuntimeError(message) from exc
+
+
+def google_api_error_message(exc: Exception) -> str:
+    """Return a user-facing message for common Google API failures."""
+    if exc.__class__.__name__ != "HttpError":
+        return ""
+
+    status = getattr(getattr(exc, "resp", None), "status", None)
+    details = str(exc).strip()
+    lower_details = details.casefold()
+
+    if (
+        "accessnotconfigured" in lower_details
+        or "api has not been used" in lower_details
+        or "disabled" in lower_details
+    ):
+        return (
+            "Google API request failed because a required API appears disabled. "
+            "Enable both the Google Sheets API and Google Drive API in the Google "
+            "Cloud project that owns google_client_secret.json, then retry. "
+            f"Details: {details}"
+        )
+
+    if (
+        "insufficient authentication scopes" in lower_details
+        or "insufficientpermissions" in lower_details
+        or "request had insufficient authentication scopes" in lower_details
+    ):
+        return (
+            "google_token.json does not have sufficient Google OAuth scopes. "
+            "Delete google_token.json and authorize again with both Google Sheets "
+            "and Google Drive access. "
+            f"Details: {details}"
+        )
+
+    if status in {401, 403}:
+        return (
+            "Google API authorization failed. Confirm google_token.json belongs to "
+            "the Google account that owns the target Sheet/Drive folder and that "
+            "the token has Sheets and Drive scopes. "
+            f"Details: {details}"
+        )
+
+    return f"Google API request failed. Details: {details}"
 
 
 def build_authorized_http(creds: Any, *, error_cls: type[RuntimeError]) -> Any:
@@ -85,25 +137,175 @@ def build_google_service(
     )
 
 
+def oauth_scope_set(scopes: Iterable[str]) -> set[str]:
+    """Return a normalized scope set."""
+    return {scope.strip() for scope in scopes if scope.strip()}
+
+
+def token_declared_scopes(token_path: Path) -> set[str]:
+    """Return scopes declared in a saved authorized-user token JSON."""
+    try:
+        token_info = json.loads(token_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError) as exc:
+        raise RuntimeError(
+            f"Could not read {token_path.name}. Delete it and authorize again. "
+            f"Details: {exc}"
+        ) from exc
+
+    raw_scopes = token_info.get("scopes") or token_info.get("scope") or []
+    if isinstance(raw_scopes, str):
+        return oauth_scope_set(raw_scopes.split())
+    if isinstance(raw_scopes, list):
+        return oauth_scope_set(str(scope) for scope in raw_scopes)
+    return set()
+
+
+def validate_token_scopes(token_path: Path, scopes: list[str]) -> None:
+    """Fail fast when a saved token clearly lacks required scopes."""
+    declared_scopes = token_declared_scopes(token_path)
+    if not declared_scopes:
+        return
+
+    missing_scopes = sorted(oauth_scope_set(scopes) - declared_scopes)
+    if missing_scopes:
+        missing = ", ".join(missing_scopes)
+        raise RuntimeError(
+            f"{token_path.name} is missing required Google OAuth scope(s): {missing}. "
+            f"Delete {token_path.name} and authorize again with the shared Sheets "
+            "and Drive scopes."
+        )
+
+
+def run_google_oauth_flow(
+    *,
+    client_secret_file: Path,
+    token_file: Path,
+    scopes: list[str],
+    error_cls: type[RuntimeError],
+) -> Any:
+    """Run the desktop OAuth flow once and persist the authorized-user token."""
+    if not client_secret_file.exists():
+        raise error_cls(
+            f"Missing {token_file.name} and {client_secret_file.name}. Download an "
+            "OAuth client JSON for a Desktop app from Google Cloud, save it as "
+            "google_client_secret.json or set GOOGLE_CLIENT_SECRET_FILE, then "
+            "rerun to authorize in the browser and create google_token.json."
+        )
+
+    try:
+        from google_auth_oauthlib.flow import InstalledAppFlow
+    except ImportError as exc:
+        raise error_cls(
+            "Missing Google OAuth browser-flow support. Install dependencies with: "
+            "python -m pip install -r requirements.txt"
+        ) from exc
+
+    try:
+        flow = InstalledAppFlow.from_client_secrets_file(
+            str(client_secret_file),
+            scopes,
+        )
+        creds = flow.run_local_server(
+            port=0,
+            access_type="offline",
+            prompt="consent",
+        )
+    except Exception as exc:
+        raise error_cls(f"Google OAuth browser authorization failed: {exc}") from exc
+
+    write_private_text_file(token_file, creds.to_json())
+    return creds
+
+
+def load_google_oauth_credentials(
+    *,
+    error_cls: type[RuntimeError],
+    token_file: Path | None = None,
+    client_secret_file: Path | None = None,
+    auth_config: GoogleAuthConfig | None = None,
+    scopes: list[str] = GOOGLE_OAUTH_SCOPES,
+) -> Any:
+    """Load, refresh, or create the shared authorized-user Google credentials."""
+    credential_files = google_credential_files_for(
+        "google",
+        auth_config=auth_config,
+        client_secret_file=client_secret_file,
+        token_file=token_file,
+    )
+    client_secret_path = credential_files.client_secret_file
+    token_path = credential_files.token_file
+
+    try:
+        from google.auth.transport.requests import Request
+        from google.oauth2.credentials import Credentials
+    except ImportError as exc:
+        raise error_cls(
+            "Missing Google API packages. Install dependencies with: "
+            "python -m pip install -r requirements.txt"
+        ) from exc
+
+    if token_path.exists():
+        try:
+            validate_token_scopes(token_path, scopes)
+            creds = Credentials.from_authorized_user_file(str(token_path), scopes)
+        except Exception as exc:
+            if isinstance(exc, RuntimeError):
+                raise error_cls(str(exc)) from exc
+            raise error_cls(
+                f"Could not read {token_path.name}. Delete it and authorize again. "
+                f"Details: {exc}"
+            ) from exc
+
+        if not creds.has_scopes(scopes):
+            missing_scopes = sorted(oauth_scope_set(scopes))
+            raise error_cls(
+                f"{token_path.name} does not include the required Google OAuth "
+                f"scope(s): {', '.join(missing_scopes)}. Delete {token_path.name} "
+                "and authorize again with both Google Sheets and Google Drive access."
+            )
+
+        if creds.valid:
+            return creds
+
+        if creds.expired and creds.refresh_token:
+            try:
+                creds.refresh(Request())
+            except Exception as exc:
+                raise error_cls(
+                    f"Could not refresh {token_path.name}. Delete it and authorize "
+                    f"again. Details: {exc}"
+                ) from exc
+            write_private_text_file(token_path, creds.to_json())
+            return creds
+
+        if not client_secret_path.exists():
+            raise error_cls(
+                f"{token_path.name} is not refreshable, and {client_secret_path.name} "
+                "is missing. Download an OAuth Desktop client JSON, save it as "
+                "google_client_secret.json or set GOOGLE_CLIENT_SECRET_FILE, then "
+                "authorize again."
+            )
+
+    return run_google_oauth_flow(
+        client_secret_file=client_secret_path,
+        token_file=token_path,
+        scopes=scopes,
+        error_cls=error_cls,
+    )
+
+
 def build_google_api_service(
     service_name: str,
     version: str,
     *,
     error_cls: type[RuntimeError],
-    service_account_file: Path | None = None,
+    token_file: Path | None = None,
+    client_secret_file: Path | None = None,
     auth_config: GoogleAuthConfig | None = None,
-    scopes: list[str],
+    scopes: list[str] = GOOGLE_OAUTH_SCOPES,
 ) -> Any:
-    """Build a service-account-authenticated Google API service."""
-    credential_files = google_credential_files_for(
-        service_name,
-        auth_config=auth_config,
-        service_account_file=service_account_file,
-    )
-    service_account_path = credential_files.service_account_file
-
+    """Build an OAuth-authenticated Google API service."""
     try:
-        from google.oauth2 import service_account
         from googleapiclient.discovery import build
     except ImportError as exc:
         raise error_cls(
@@ -111,16 +313,12 @@ def build_google_api_service(
             "python -m pip install -r requirements.txt"
         ) from exc
 
-    if not service_account_path.exists():
-        raise error_cls(
-            f"Missing {service_account_path.name}. Create a Google service account, "
-            "download its JSON key, save it as google_service_account.json or set "
-            "GOOGLE_SERVICE_ACCOUNT_FILE, then share the target Google Sheet with "
-            "the service-account email as Editor."
-        )
-
-    creds = service_account.Credentials.from_service_account_file(
-        str(service_account_path), scopes=scopes
+    creds = load_google_oauth_credentials(
+        error_cls=error_cls,
+        token_file=token_file,
+        client_secret_file=client_secret_file,
+        auth_config=auth_config,
+        scopes=scopes,
     )
 
     return build_google_service(
@@ -129,6 +327,28 @@ def build_google_api_service(
         version,
         creds,
         error_cls=error_cls,
+    )
+
+
+def build_google_oauth_service(
+    service_name: str,
+    version: str,
+    *,
+    error_cls: type[RuntimeError],
+    token_file: Path | None = None,
+    client_secret_file: Path | None = None,
+    auth_config: GoogleAuthConfig | None = None,
+    scopes: list[str] = GOOGLE_OAUTH_SCOPES,
+) -> Any:
+    """Backward-compatible OAuth service builder."""
+    return build_google_api_service(
+        service_name,
+        version,
+        error_cls=error_cls,
+        token_file=token_file,
+        client_secret_file=client_secret_file,
+        auth_config=auth_config,
+        scopes=scopes,
     )
 
 
@@ -137,55 +357,41 @@ def build_google_drive_oauth_service(
     *,
     error_cls: type[RuntimeError],
     token_file: Path | None = None,
+    client_secret_file: Path | None = None,
     auth_config: GoogleAuthConfig | None = None,
-    scopes: list[str],
+    scopes: list[str] = GOOGLE_OAUTH_SCOPES,
 ) -> Any:
-    """Build a Google Drive API service from an authorized-user token."""
-    credential_files = google_credential_files_for(
-        "drive",
-        auth_config=auth_config,
-        drive_token_file=token_file,
-    )
-    drive_token_path = credential_files.drive_token_file
-
-    try:
-        from google.auth.transport.requests import Request
-        from google.oauth2.credentials import Credentials
-        from googleapiclient.discovery import build
-    except ImportError as exc:
-        raise error_cls(
-            "Missing Google API packages. Install dependencies with: "
-            "python -m pip install -r requirements.txt"
-        ) from exc
-
-    if not drive_token_path.exists():
-        raise error_cls(
-            f"Missing {drive_token_path.name}. Create a Google Drive authorized-user "
-            "token once, save it as google_token.json or set GOOGLE_DRIVE_TOKEN_FILE, "
-            "and use GOOGLE_DRIVE_TOKEN_JSON in GitHub Actions."
-        )
-
-    creds = Credentials.from_authorized_user_file(str(drive_token_path), scopes)
-    if not creds.has_scopes(scopes):
-        raise error_cls(
-            f"{drive_token_path.name} does not include the required Google Drive "
-            "scope. Recreate the token with Drive access."
-        )
-
-    if not creds.valid:
-        if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            write_private_text_file(drive_token_path, creds.to_json())
-        else:
-            raise error_cls(
-                f"{drive_token_path.name} is not a refreshable Google Drive token. "
-                "Recreate it as an authorized-user token with offline access."
-            )
-
-    return build_google_service(
-        build,
+    """Build a Google Drive API service from the shared OAuth token."""
+    return build_google_oauth_service(
         "drive",
         version,
-        creds,
+        error_cls=error_cls,
+        token_file=token_file,
+        client_secret_file=client_secret_file,
+        auth_config=auth_config,
+        scopes=scopes,
+    )
+
+
+def authorize_google_oauth(
+    *,
+    error_cls: type[RuntimeError] = RuntimeError,
+    token_file: Path | None = None,
+    client_secret_file: Path | None = None,
+    auth_config: GoogleAuthConfig | None = None,
+    scopes: list[str] = GOOGLE_OAUTH_SCOPES,
+) -> Path:
+    """Run browser authorization and return the token path."""
+    credential_files = google_credential_files_for(
+        "google",
+        auth_config=auth_config,
+        client_secret_file=client_secret_file,
+        token_file=token_file,
+    )
+    run_google_oauth_flow(
+        client_secret_file=credential_files.client_secret_file,
+        token_file=credential_files.token_file,
+        scopes=scopes,
         error_cls=error_cls,
     )
+    return credential_files.token_file

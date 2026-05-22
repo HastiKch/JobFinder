@@ -21,7 +21,7 @@ from jobfinder.evaluator.parsing import (
 )
 from jobfinder.evaluator.pdf_output import (
     DEFAULT_CV_PDF_APPLICANT_NAME,
-    DEFAULT_DRIVE_PARENT_FOLDER_NAME,
+    DEFAULT_DRIVE_PARENT_FOLDER_ID,
     generate_cv_pdf_outputs,
 )
 from jobfinder.evaluator.storage import (
@@ -93,7 +93,7 @@ class EvaluationOptions:
     cv_pdf_output: bool
     cv_photo_file: Path
     cv_pdf_compile_timeout: int
-    cv_drive_parent_folder: str
+    cv_drive_folder_id: str
     cv_pdf_applicant_name: str
     large_queue_threshold: int
     large_queue_sleep_ms: int
@@ -126,6 +126,18 @@ def options_from_env(
     google_sheet_id_arg: str,
 ) -> EvaluationOptions:
     """Build evaluator options from CLI args plus environment settings."""
+    cv_pdf_output = env.get_bool("JOB_EVAL_CV_PDF_OUTPUT", True)
+    cv_drive_folder_id = env.get(
+        "JOB_EVAL_CV_DRIVE_FOLDER_ID",
+        DEFAULT_DRIVE_PARENT_FOLDER_ID,
+    )
+    if cv_pdf_output and not cv_drive_folder_id.strip():
+        raise EvaluationError(
+            "Missing JOB_EVAL_CV_DRIVE_FOLDER_ID. Set it to the ID of the Google "
+            "Drive folder where generated CV PDFs should be uploaded, or set "
+            "JOB_EVAL_CV_PDF_OUTPUT=false."
+        )
+
     return EvaluationOptions(
         env=env,
         source_arg=source_arg,
@@ -144,15 +156,12 @@ def options_from_env(
         retry_max_delay=env.get_float("JOB_EVAL_RETRY_MAX_DELAY", 60.0),
         timeout=env.get_float("JOB_EVAL_OPENAI_TIMEOUT", 120.0),
         max_output_tokens=env.get_int("JOB_EVAL_MAX_OUTPUT_TOKENS", 9000),
-        cv_pdf_output=env.get_bool("JOB_EVAL_CV_PDF_OUTPUT", True),
+        cv_pdf_output=cv_pdf_output,
         cv_photo_file=Path(
             env.get("JOB_EVAL_CV_PHOTO_FILE", str(DEFAULT_CV_PHOTO_FILE))
         ),
         cv_pdf_compile_timeout=env.get_int("JOB_EVAL_CV_PDF_TIMEOUT", 120),
-        cv_drive_parent_folder=env.get(
-            "JOB_EVAL_CV_DRIVE_PARENT_FOLDER",
-            DEFAULT_DRIVE_PARENT_FOLDER_NAME,
-        ),
+        cv_drive_folder_id=cv_drive_folder_id,
         cv_pdf_applicant_name=env.get(
             "JOB_EVAL_CV_PDF_APPLICANT_NAME",
             DEFAULT_CV_PDF_APPLICANT_NAME,
@@ -447,7 +456,7 @@ def run_evaluation(options: EvaluationOptions) -> EvaluationSummary:
             records,
             evaluations,
             photo_path=photo_path,
-            parent_folder_name=options.cv_drive_parent_folder,
+            parent_folder_id=options.cv_drive_folder_id,
             applicant_name=options.cv_pdf_applicant_name,
             timeout_seconds=options.cv_pdf_compile_timeout,
         )

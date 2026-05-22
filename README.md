@@ -41,7 +41,7 @@ Key capabilities:
 - Deterministic cross-provider deduplication without AI.
 - Historical duplicate suppression through Google Sheets run history.
 - Scheduled and manual GitHub Actions pipeline runs.
-- Service-account Google Sheets integration and authorized-user Google Drive uploads.
+- OAuth-only Google Sheets and Drive integration using the user's account.
 - OpenAI-based job-fit evaluation with prompt and CV injection.
 - LaTeX PDF generation for tailored CVs, with Google Drive links in the sheet.
 - Incremental evaluator saves for crash recovery.
@@ -199,8 +199,8 @@ Excel.
 8. Save each completed evaluation immediately, or in batches controlled by
    `JOB_EVAL_SAVE_BATCH_SIZE`.
 9. Compile generated CV LaTeX into PDFs, upload them to a timestamped Google
-   Drive run folder under `JobFinder`, and write the PDF link or compilation
-   error to `AI CV PDF`.
+   Drive run folder under `JOB_EVAL_CV_DRIVE_FOLDER_ID`, and write the PDF link
+   or compilation error to `AI CV PDF`.
 10. Finalize by removing legacy AI metadata columns, detail columns such as
    `Job Description`, and the temporary `AI Tailored CV` column when PDF output
    is enabled.
@@ -221,8 +221,8 @@ Default evaluator policy:
 - LaTeX tooling for evaluator PDF output: `latexmk` and `xelatex`.
 - Apify API token for scraping.
 - OpenAI API key for `scrape_and_evaluate` or evaluator-only runs.
-- Google service account for Sheets, editable Google Sheet, and a Google Drive
-  authorized-user token for saved PDFs.
+- Google OAuth Desktop client credentials and a one-time browser authorization
+  for the account that should own Sheets and uploaded PDFs.
 - Optional local Excel workflow through `openpyxl`.
 
 Install runtime dependencies with Conda:
@@ -333,42 +333,28 @@ JOB_EVAL_OPENAI_MODEL=gpt-5-mini
 
 ### Google Sheets And Drive Setup
 
-JobFinder uses one permanent method for each Google service:
+JobFinder uses Google OAuth for both Google Sheets and Google Drive. The same
+`google_token.json` reads and writes Sheets, creates new spreadsheets in the
+authorized user's Drive account, refreshes automatically, and uploads generated
+PDFs to that user's Drive folder.
 
-- Google Sheets: service account.
-- Google Drive PDF uploads: authorized-user token from your Google account.
-
-The Drive token is the stable OAuth method when the app is published to
-Production in Google Cloud. It avoids the 7-day testing-mode refresh-token
-expiry and avoids the service-account Drive storage-quota failure.
-
-Set up Google Sheets:
+Set up OAuth once:
 
 1. Enable the Google Sheets API and Google Drive API in Google Cloud.
-2. Create a service account.
-3. Download a JSON key.
-4. Share the target Google Sheet with the service account's `client_email` as
-   Editor.
-5. Save the key locally as `google_service_account.json`.
+2. Configure the OAuth consent screen and publish the app to Production. Testing
+   mode refresh tokens can expire after 7 days.
+3. Create an OAuth client of type Desktop app.
+4. Download the client JSON locally as `google_client_secret.json`.
+5. Run `python -m jobfinder.google_auth` from the repository. Your browser will
+   ask for Sheets and Drive access, then JobFinder saves `google_token.json`.
 6. Set `GOOGLE_SPREADSHEET_ID` or save the ID in `google_spreadsheet_id.txt`.
-
-You can point at a differently named service-account key with
-`GOOGLE_SERVICE_ACCOUNT_FILE`, but Sheets still uses the same service-account
-method.
-
-Set up Google Drive:
-
-1. In Google Cloud, configure the OAuth consent screen and publish the app to
-   Production.
-2. Create an OAuth client of type Desktop app.
-3. Download the client JSON locally as `google_client_secret.json`.
-4. Run the one-time Drive authorization command from `README.local.md` to create
-   `google_token.json`.
-5. The Drive parent folder defaults to `JobFinder`; JobFinder creates it in the
-   authorized Google Drive account when needed.
+   If no spreadsheet ID is configured, scraper Google Sheets output creates a
+   new `jobs` spreadsheet in the authorized user's Drive account.
+7. Set `JOB_EVAL_CV_DRIVE_FOLDER_ID` to the Drive folder ID where timestamped
+   PDF run folders should be created.
 
 For GitHub Actions, paste the contents of `google_token.json` into the
-`GOOGLE_DRIVE_TOKEN_JSON` secret.
+`GOOGLE_TOKEN_JSON` secret and set `JOB_EVAL_CV_DRIVE_FOLDER_ID`.
 
 ## Quick Start
 
@@ -565,7 +551,7 @@ Stepstone date filtering maps `rSECONDS` windows to supported day buckets:
 | `JOB_EVAL_CV_PDF_OUTPUT` | `true` | Compile generated LaTeX CVs to PDFs and upload them to Google Drive. |
 | `JOB_EVAL_CV_PHOTO_FILE` | `cv/photo.jpg` | Optional local photo copied into each isolated LaTeX build directory. |
 | `JOB_EVAL_CV_PDF_TIMEOUT` | `120` | Max seconds allowed for one LaTeX PDF compilation. |
-| `JOB_EVAL_CV_DRIVE_PARENT_FOLDER` | `JobFinder` | Google Drive parent folder for timestamped evaluator PDF folders. |
+| `JOB_EVAL_CV_DRIVE_FOLDER_ID` | blank | Google Drive folder ID for timestamped evaluator PDF folders. Required when `JOB_EVAL_CV_PDF_OUTPUT=true`. |
 | `JOB_EVAL_CV_PDF_APPLICANT_NAME` | `Applicant` | Applicant name used in upload-safe PDF filenames like `12_CV_Applicant_GIS_Analyst_Acme.pdf`. |
 | `JOB_EVAL_LARGE_QUEUE_THRESHOLD` | `200` | Enables request pacing when queued rows exceed this count. |
 | `JOB_EVAL_LARGE_QUEUE_SLEEP_MS` | `2000` | Delay between request starts when pacing is enabled. |
@@ -670,8 +656,8 @@ Required GitHub secrets:
 | `APIFY_API_TOKEN` | all runs | One token or up to 12 semicolon-separated fallback tokens. |
 | `OPENAI_API_KEY` | `scrape_and_evaluate` | OpenAI API key. |
 | `GOOGLE_SPREADSHEET_ID` | all runs | Target spreadsheet ID. |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | all runs | Full service-account JSON key for Google Sheets. |
-| `GOOGLE_DRIVE_TOKEN_JSON` | `scrape_and_evaluate` | Full authorized-user token JSON from `google_token.json` for Drive PDF uploads. |
+| `GOOGLE_TOKEN_JSON` | all runs | Full authorized-user token JSON from `google_token.json` for Sheets and Drive. |
+| `JOB_EVAL_CV_DRIVE_FOLDER_ID` | `scrape_and_evaluate` | Google Drive folder ID for generated CV PDF run folders. |
 | `JOB_KEYWORDS_TEXT` | all runs | Full private keyword file content. |
 | `MASTER_PROMPT_TEXT` | `scrape_and_evaluate` | Full private evaluator prompt. |
 | `MASTER_CV_TEX` | `scrape_and_evaluate` | Full private LaTeX CV. |
@@ -804,8 +790,8 @@ cleanup, run the relevant focused tests plus the full suite.
 | Apify 401/403/402 failures | Invalid token, actor access issue, or billing problem. | Confirm token account can run the configured actor and has billing/trial access. |
 | Apify transient 502/503/504 or timeout | Actor/API instability or too much concurrency. | Lower search concurrency, lower per-search limits, or increase timeout. |
 | No jobs found | Search/filter window too narrow or provider config mismatch. | Check keywords, provider source, posted-time window, Stepstone location/start URLs, and final filters. |
-| Google Sheets auth fails | Wrong credential type or missing Sheet permission. | Use service-account JSON and share the sheet with its `client_email` as Editor. |
-| Drive upload fails | Missing/invalid `google_token.json`, Drive API disabled, or token missing Drive scope. | Recreate the authorized-user token with Drive access and make sure the OAuth app is published to Production. |
+| Google Sheets auth fails | Missing/invalid `google_token.json`, disabled API, wrong account, or insufficient scopes. | Enable Sheets and Drive APIs, delete `google_token.json`, and run `python -m jobfinder.google_auth` again. |
+| Drive upload fails | Missing folder ID, missing/invalid `google_token.json`, Drive API disabled, wrong account, or insufficient scopes. | Set `JOB_EVAL_CV_DRIVE_FOLDER_ID`, confirm the folder is accessible to the authorized account, and recreate the token if needed. |
 | Spreadsheet not found | Full URL pasted instead of ID, or wrong account. | Use only the ID from `/spreadsheets/d/<id>/`. |
 | CV PDF cell shows `LaTeX compilation failed` | Missing LaTeX package, invalid generated LaTeX, or missing referenced photo. | Install `latexmk` and `xelatex`, check the generated LaTeX, and ensure `JOB_EVAL_CV_PHOTO_FILE` points to the expected image. |
 | Evaluator skips rows | `AI Verdict` already exists and is not `Error`. | Clear the verdict cells or create a fresh run tab. |
@@ -866,11 +852,16 @@ Never commit:
 ```text
 .env
 google_client_secret.json
+google_client_secret*.json
+*client_secret*.json
+*client-secret*.json
 google_service_account*.json
 *service_account*.json
 *service-account*.json
 jobfinder-*.json
 google_token.json
+google_token*.json
+*google_token*.json
 google_spreadsheet_id.txt
 configs/keywords.txt
 prompts/master_prompt.txt
@@ -883,7 +874,7 @@ jobs_*.xlsx
 Security practices:
 
 - Use GitHub repository secrets for production values.
-- Treat Google service-account JSON as a private credential.
+- Treat Google OAuth client secrets and token JSON as private credentials.
 - Rotate exposed Apify, OpenAI, or Google credentials immediately.
 - Do not print tokens or credential JSON in logs.
 - Keep private prompt and CV content outside Git.

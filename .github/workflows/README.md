@@ -55,7 +55,7 @@ flowchart TD
     C --> D["install requirements.txt"]
     D --> E["validate required secrets"]
     E --> F["write private keyword/prompt/CV/photo files"]
-    F --> G["write Google service account and spreadsheet ID"]
+    F --> G["write Google OAuth token and spreadsheet ID"]
     G --> H["preflight provider and sheet access"]
     H --> I["run selected pipeline"]
     I --> J["write workflow summary"]
@@ -72,8 +72,8 @@ runtime files from secrets. Cleanup removes those files in an `always()` step.
 |---|---|---|
 | `APIFY_API_TOKEN` | Always | One Apify token or up to 12 semicolon-separated tokens. |
 | `GOOGLE_SPREADSHEET_ID` | Always | Target spreadsheet ID. |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | Always | Full service-account JSON key for Google Sheets. |
-| `GOOGLE_DRIVE_TOKEN_JSON` | `scrape_and_evaluate` | Full authorized-user token JSON from `google_token.json` for Drive PDF uploads. |
+| `GOOGLE_TOKEN_JSON` | Always | Full authorized-user token JSON from `google_token.json` for Sheets and Drive. |
+| `JOB_EVAL_CV_DRIVE_FOLDER_ID` | `scrape_and_evaluate` | Drive folder ID for generated CV PDF run folders. |
 | `JOB_KEYWORDS_TEXT` | Always | Contents of private `configs/keywords.txt`. |
 | `OPENAI_API_KEY` | `scrape_and_evaluate` | OpenAI API key. |
 | `MASTER_PROMPT_TEXT` | `scrape_and_evaluate` | Contents of private evaluator prompt. |
@@ -97,6 +97,6 @@ Reports are generated only when the corresponding env var path is configured.
   cancel an already running pipeline.
 - The job timeout is 360 minutes.
 - Scheduled runs use default workflow inputs, not the last manual selections.
-- The workflow writes Google service-account and Drive token JSON to temporary
-  runner files and applies restrictive file permissions before use.
+- The workflow writes Google OAuth token JSON to a temporary runner file and
+  applies restrictive file permissions before use.
 - Do not echo secret values while debugging.

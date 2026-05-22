@@ -139,8 +139,9 @@ into the temp directory before compilation. Compilation errors are written to
 `AI CV PDF` for that row and do not stop the evaluator.
 
 Successful PDFs are uploaded to a new timestamped folder named
-`YYYY-MM-DD_HH-MM-SS` inside a Google Drive parent folder named `JobFinder` by
-default. Drive uploads use the authorized-user token in `google_token.json`.
+`YYYY-MM-DD_HH-MM-SS` inside the Google Drive folder identified by
+`JOB_EVAL_CV_DRIVE_FOLDER_ID`. Drive uploads use the shared OAuth token in
+`google_token.json`.
 
 ## Rejection Row Policy
 

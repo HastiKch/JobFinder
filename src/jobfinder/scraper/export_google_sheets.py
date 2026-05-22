@@ -282,16 +282,23 @@ def export_to_google_sheets(
     settings: ScraperSettings, service: Any, jobs: list[dict[str, Any]]
 ) -> str:
     """Write jobs to a new timestamped tab in Google Sheets."""
-    spreadsheet_id, spreadsheet_url, sheet_name, sheet_id, existing_sheet_names = (
-        get_or_create_google_run_sheet(settings, service)
-    )
-    job_rows = make_job_rows(settings, jobs)
+    try:
+        spreadsheet_id, spreadsheet_url, sheet_name, sheet_id, existing_sheet_names = (
+            get_or_create_google_run_sheet(settings, service)
+        )
+        job_rows = make_job_rows(settings, jobs)
 
-    update_values(service, spreadsheet_id, sheet_name, job_rows)
-    format_spreadsheet(settings, service, spreadsheet_id, sheet_id, len(job_rows))
-    seen_keys: set[str] = set()
-    for job in jobs:
-        seen_keys.update(job_identity_keys(settings, job))
-    append_seen_job_keys(service, spreadsheet_id, existing_sheet_names, seen_keys)
+        update_values(service, spreadsheet_id, sheet_name, job_rows)
+        format_spreadsheet(settings, service, spreadsheet_id, sheet_id, len(job_rows))
+        seen_keys: set[str] = set()
+        for job in jobs:
+            seen_keys.update(job_identity_keys(settings, job))
+        append_seen_job_keys(service, spreadsheet_id, existing_sheet_names, seen_keys)
+    except GoogleSheetsExportError:
+        raise
+    except Exception as exc:
+        raise GoogleSheetsExportError(
+            f"Google Sheets export failed. Details: {exc}"
+        ) from exc
 
     return f"{spreadsheet_url} (sheet: {sheet_name})"

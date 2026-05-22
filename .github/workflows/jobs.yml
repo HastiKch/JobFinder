@@ -72,8 +72,9 @@ jobs:
       APIFY_API_TOKEN: ${{ secrets.APIFY_API_TOKEN }}
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       GOOGLE_SPREADSHEET_ID: ${{ secrets.GOOGLE_SPREADSHEET_ID }}
-      GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      GOOGLE_TOKEN_JSON: ${{ secrets.GOOGLE_TOKEN_JSON }}
       GOOGLE_DRIVE_TOKEN_JSON: ${{ secrets.GOOGLE_DRIVE_TOKEN_JSON }}
+      JOB_EVAL_CV_DRIVE_FOLDER_ID: ${{ secrets.JOB_EVAL_CV_DRIVE_FOLDER_ID }}
       JOB_KEYWORDS_TEXT: ${{ secrets.JOB_KEYWORDS_TEXT }}
       MASTER_PROMPT_TEXT: ${{ secrets.MASTER_PROMPT_TEXT }}
       MASTER_CV_TEX: ${{ secrets.MASTER_CV_TEX }}
@@ -183,8 +184,9 @@ jobs:
             missing=1
           fi
 
-          if [ -z "${GOOGLE_SERVICE_ACCOUNT_JSON}" ]; then
-            echo "::error::Missing repository secret GOOGLE_SERVICE_ACCOUNT_JSON. Paste the full service-account JSON key into this secret."
+          google_token_json="${GOOGLE_TOKEN_JSON:-${GOOGLE_DRIVE_TOKEN_JSON:-}}"
+          if [ -z "${google_token_json}" ]; then
+            echo "::error::Missing repository secret GOOGLE_TOKEN_JSON. Paste the full authorized-user token JSON from google_token.json into this secret."
             missing=1
           fi
 
@@ -193,8 +195,8 @@ jobs:
             missing=1
           fi
 
-          if [ "$should_evaluate" -eq 1 ] && [ -z "${GOOGLE_DRIVE_TOKEN_JSON}" ]; then
-            echo "::error::Missing repository secret GOOGLE_DRIVE_TOKEN_JSON. Paste the full authorized-user token JSON from google_token.json into this secret."
+          if [ "$should_evaluate" -eq 1 ] && [ -z "${JOB_EVAL_CV_DRIVE_FOLDER_ID}" ]; then
+            echo "::error::Missing repository secret JOB_EVAL_CV_DRIVE_FOLDER_ID. Use the ID of the Drive folder that should contain generated CV PDFs."
             missing=1
           fi
 
@@ -267,58 +269,42 @@ jobs:
           import json
           import sys
 
-          service_account_json = os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"].strip()
-          drive_token_json = os.environ.get("GOOGLE_DRIVE_TOKEN_JSON", "").strip()
+          google_token_json = (
+              os.environ.get("GOOGLE_TOKEN_JSON", "").strip()
+              or os.environ.get("GOOGLE_DRIVE_TOKEN_JSON", "").strip()
+          )
           spreadsheet_id = os.environ.get("GOOGLE_SPREADSHEET_ID", "").strip()
 
           try:
-              credentials = json.loads(service_account_json)
+              google_token = json.loads(google_token_json)
           except json.JSONDecodeError as exc:
-              print(f"::error::GOOGLE_SERVICE_ACCOUNT_JSON is not valid JSON: {exc}")
+              print(f"::error::GOOGLE_TOKEN_JSON is not valid JSON: {exc}")
               sys.exit(1)
 
-          if credentials.get("type") != "service_account":
-              print("::error::GOOGLE_SERVICE_ACCOUNT_JSON must be a service-account key JSON.")
-              sys.exit(1)
-
-          Path("google_service_account.json").write_text(
-              service_account_json, encoding="utf-8"
+          has_authorized_user_fields = all(
+              google_token.get(key)
+              for key in ("client_id", "client_secret", "refresh_token")
           )
-          if drive_token_json:
-              try:
-                  drive_token = json.loads(drive_token_json)
-              except json.JSONDecodeError as exc:
-                  print(f"::error::GOOGLE_DRIVE_TOKEN_JSON is not valid JSON: {exc}")
-                  sys.exit(1)
-
-              has_authorized_user_fields = all(
-                  drive_token.get(key)
-                  for key in ("client_id", "client_secret", "refresh_token")
+          if (
+              google_token.get("type") != "authorized_user"
+              and not has_authorized_user_fields
+          ):
+              print(
+                  "::error::GOOGLE_TOKEN_JSON must be an authorized-user token JSON "
+                  "created by the local OAuth browser flow."
               )
-              if (
-                  drive_token.get("type") != "authorized_user"
-                  and not has_authorized_user_fields
-              ):
-                  print(
-                      "::error::GOOGLE_DRIVE_TOKEN_JSON must be an authorized-user "
-                      "token JSON generated for Google Drive access."
-                  )
-                  sys.exit(1)
+              sys.exit(1)
 
-              Path("google_token.json").write_text(drive_token_json, encoding="utf-8")
+          Path("google_token.json").write_text(google_token_json, encoding="utf-8")
 
           if spreadsheet_id:
               Path("google_spreadsheet_id.txt").write_text(spreadsheet_id, encoding="utf-8")
           PY
 
-          chmod 600 google_service_account.json
+          chmod 600 google_token.json
 
           if [ -f google_spreadsheet_id.txt ]; then
             chmod 600 google_spreadsheet_id.txt
-          fi
-
-          if [ -f google_token.json ]; then
-            chmod 600 google_token.json
           fi
 
       - name: Preflight provider access
@@ -398,7 +384,6 @@ jobs:
             prompts/master_prompt.txt \
             cv/master_cv.tex \
             cv/photo.jpg \
-            google_service_account.json \
             google_token.json \
             google_spreadsheet_id.txt \
             pipeline.log

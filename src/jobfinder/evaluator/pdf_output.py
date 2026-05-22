@@ -18,11 +18,11 @@ from jobfinder.integrations.google.drive import (
     DriveFolder,
     build_google_drive_service,
     create_drive_folder,
-    get_or_create_drive_folder,
+    get_drive_folder,
     upload_pdf_to_drive,
 )
 
-DEFAULT_DRIVE_PARENT_FOLDER_NAME = "JobFinder"
+DEFAULT_DRIVE_PARENT_FOLDER_ID = ""
 DEFAULT_CV_PDF_APPLICANT_NAME = "Applicant"
 ERROR_CELL_LIMIT = 4000
 INVALID_FILENAME_CHARS_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
@@ -196,11 +196,11 @@ def error_cell(prefix: str, details: str) -> str:
 def prepare_drive_run_folder(
     service: Any,
     *,
-    parent_folder_name: str,
+    parent_folder_id: str,
     now: datetime | None = None,
 ) -> tuple[DriveFolder, DriveFolder]:
-    """Create the parent and timestamped Drive folder for this evaluator run."""
-    parent = get_or_create_drive_folder(service, parent_folder_name)
+    """Create the timestamped Drive folder for this evaluator run."""
+    parent = get_drive_folder(service, parent_folder_id)
     run_folder = create_drive_folder(
         service,
         drive_run_folder_name(now),
@@ -215,7 +215,7 @@ def generate_cv_pdf_outputs(
     *,
     photo_path: Path | None = None,
     drive_service: Any | None = None,
-    parent_folder_name: str = DEFAULT_DRIVE_PARENT_FOLDER_NAME,
+    parent_folder_id: str = DEFAULT_DRIVE_PARENT_FOLDER_ID,
     applicant_name: str = DEFAULT_CV_PDF_APPLICANT_NAME,
     now: datetime | None = None,
     timeout_seconds: int = 120,
@@ -235,7 +235,7 @@ def generate_cv_pdf_outputs(
         service = drive_service or build_evaluator_google_drive_service()
         _, run_folder = prepare_drive_run_folder(
             service,
-            parent_folder_name=parent_folder_name,
+            parent_folder_id=parent_folder_id,
             now=now,
         )
     except Exception as exc:

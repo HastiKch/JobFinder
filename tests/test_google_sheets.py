@@ -1,18 +1,27 @@
-"""Tests for Google service-account authentication helpers."""
+"""Tests for Google OAuth authentication helpers."""
 
 from __future__ import annotations
 
+import json
 import sys
 import types
 from pathlib import Path
+from unittest.mock import ANY
 
 import pytest
 
 from jobfinder.env import EnvSettings
-from jobfinder.integrations.google.client import build_google_api_service
+from jobfinder.integrations.google.client import (
+    authorize_google_oauth,
+    build_google_api_service,
+    google_api_error_message,
+    load_google_oauth_credentials,
+)
 from jobfinder.integrations.google.credentials import (
+    GOOGLE_CLIENT_SECRET_FILE_ENV,
     GOOGLE_DRIVE_TOKEN_FILE_ENV,
-    GOOGLE_SHARED_SERVICE_ACCOUNT_FILE_ENV,
+    GOOGLE_OAUTH_SCOPES,
+    GOOGLE_TOKEN_FILE_ENV,
     GoogleAuthConfig,
     default_google_auth_config,
 )
@@ -24,9 +33,9 @@ from jobfinder.paths import PROJECT_ROOT
 def install_fake_google_modules(
     monkeypatch,
     *,
-    service_account_loader=None,
     user_credentials_loader=None,
     build_func=None,
+    flow_factory=None,
 ):
     """Install fake Google modules so auth tests do not need network packages."""
     google = types.ModuleType("google")
@@ -34,18 +43,27 @@ def install_fake_google_modules(
     google_transport = types.ModuleType("google.auth.transport")
     google_requests = types.ModuleType("google.auth.transport.requests")
     google_oauth2 = types.ModuleType("google.oauth2")
-    service_account = types.ModuleType("google.oauth2.service_account")
     user_credentials = types.ModuleType("google.oauth2.credentials")
     google_auth_httplib2 = types.ModuleType("google_auth_httplib2")
     httplib2 = types.ModuleType("httplib2")
     googleapiclient = types.ModuleType("googleapiclient")
     discovery = types.ModuleType("googleapiclient.discovery")
-
-    class ServiceAccountCredentials:
-        pass
+    google_auth_oauthlib = types.ModuleType("google_auth_oauthlib")
+    flow_module = types.ModuleType("google_auth_oauthlib.flow")
 
     class UserCredentials:
-        pass
+        valid = True
+        expired = False
+        refresh_token = "refresh"
+
+        def has_scopes(self, scopes):
+            return True
+
+        def refresh(self, request):
+            self.valid = True
+
+        def to_json(self):
+            return '{"type":"authorized_user","scopes":[]}'
 
     class Request:
         pass
@@ -59,11 +77,15 @@ def install_fake_google_modules(
             self.credentials = credentials
             self.http = http
 
-    def default_service_account_loader(filename, scopes):
-        return "service-account-creds"
+    class Flow:
+        @staticmethod
+        def from_client_secrets_file(filename, scopes):
+            if flow_factory is None:
+                pytest.fail("OAuth browser flow should not run.")
+            return flow_factory(filename, scopes)
 
     def default_user_credentials_loader(filename, scopes):
-        pytest.fail("Drive token auth should not run.")
+        return UserCredentials()
 
     def default_build(
         service_name, version, credentials=None, http=None, cache_discovery=False
@@ -76,26 +98,23 @@ def install_fake_google_modules(
             "cache_discovery": cache_discovery,
         }
 
-    ServiceAccountCredentials.from_service_account_file = staticmethod(
-        service_account_loader or default_service_account_loader
-    )
     UserCredentials.from_authorized_user_file = staticmethod(
         user_credentials_loader or default_user_credentials_loader
     )
     google_requests.Request = Request
-    service_account.Credentials = ServiceAccountCredentials
     user_credentials.Credentials = UserCredentials
     google_auth_httplib2.AuthorizedHttp = AuthorizedHttp
     httplib2.Http = Http
     discovery.build = build_func or default_build
+    flow_module.InstalledAppFlow = Flow
 
     google.auth = google_auth
     google_auth.transport = google_transport
     google_transport.requests = google_requests
     google.oauth2 = google_oauth2
-    google_oauth2.service_account = service_account
     google_oauth2.credentials = user_credentials
     googleapiclient.discovery = discovery
+    google_auth_oauthlib.flow = flow_module
 
     modules = {
         "google": google,
@@ -103,28 +122,59 @@ def install_fake_google_modules(
         "google.auth.transport": google_transport,
         "google.auth.transport.requests": google_requests,
         "google.oauth2": google_oauth2,
-        "google.oauth2.service_account": service_account,
         "google.oauth2.credentials": user_credentials,
         "google_auth_httplib2": google_auth_httplib2,
         "httplib2": httplib2,
         "googleapiclient": googleapiclient,
         "googleapiclient.discovery": discovery,
+        "google_auth_oauthlib": google_auth_oauthlib,
+        "google_auth_oauthlib.flow": flow_module,
     }
 
     for name, module in modules.items():
         monkeypatch.setitem(sys.modules, name, module)
 
 
-def test_build_google_sheets_service_uses_service_account(tmp_path, monkeypatch):
-    """Sheets should authenticate with the shared service-account key."""
-    service_account_file = tmp_path / "google_service_account.json"
-    service_account_file.write_text("{}", encoding="utf-8")
+def write_token(path: Path, scopes: list[str] | None = None) -> None:
+    """Write a minimal authorized-user token file."""
+    scopes = scopes if scopes is not None else GOOGLE_OAUTH_SCOPES
+    path.write_text(
+        json.dumps(
+            {
+                "type": "authorized_user",
+                "client_id": "id",
+                "client_secret": "secret",
+                "refresh_token": "refresh",
+                "scopes": scopes,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+
+def test_build_google_sheets_service_uses_shared_oauth_token(tmp_path, monkeypatch):
+    """Sheets should authenticate with the shared authorized-user token."""
+    token_file = tmp_path / "google_token.json"
+    write_token(token_file)
+    auth_config = GoogleAuthConfig(
+        client_secret_file=tmp_path / "google_client_secret.json",
+        token_file=token_file,
+    )
     calls: dict[str, object] = {}
 
-    def fake_from_service_account_file(filename, scopes):
-        calls["service_account_file"] = Path(filename)
-        calls["scopes"] = scopes
-        return "service-account-creds"
+    class ValidCredentials:
+        valid = True
+        expired = False
+        refresh_token = "refresh"
+
+        def has_scopes(self, scopes):
+            calls["scopes"] = scopes
+            return True
+
+    def fake_from_authorized_user_file(filename, scopes):
+        calls["token_file"] = Path(filename)
+        calls["loader_scopes"] = scopes
+        return ValidCredentials()
 
     def fake_build(
         service_name,
@@ -139,33 +189,28 @@ def test_build_google_sheets_service_uses_service_account(tmp_path, monkeypatch)
 
     install_fake_google_modules(
         monkeypatch,
-        service_account_loader=fake_from_service_account_file,
+        user_credentials_loader=fake_from_authorized_user_file,
         build_func=fake_build,
     )
 
     service = build_google_sheets_service(
         error_cls=RuntimeError,
-        service_account_file=service_account_file,
-        scopes=["https://www.googleapis.com/auth/spreadsheets"],
+        auth_config=auth_config,
     )
 
     assert service == "sheets-service"
-    assert calls["service_account_file"] == service_account_file
-    assert calls["scopes"] == ["https://www.googleapis.com/auth/spreadsheets"]
-    assert calls["build"] == (
-        "sheets",
-        "v4",
-        "service-account-creds",
-        False,
-    )
+    assert calls["token_file"] == token_file
+    assert calls["scopes"] == GOOGLE_OAUTH_SCOPES
+    assert calls["loader_scopes"] == GOOGLE_OAUTH_SCOPES
+    assert calls["build"] == ("sheets", "v4", ANY, False)
 
 
-def test_build_google_api_service_uses_requested_api_for_service_account(
+def test_build_google_api_service_uses_requested_api_with_oauth(
     tmp_path, monkeypatch
 ):
-    """Shared service-account auth should build the requested Google API."""
-    service_account_file = tmp_path / "google_service_account.json"
-    service_account_file.write_text("{}", encoding="utf-8")
+    """Shared OAuth auth should build the requested Google API."""
+    token_file = tmp_path / "google_token.json"
+    write_token(token_file)
     calls: dict[str, object] = {}
 
     def fake_build(
@@ -185,71 +230,155 @@ def test_build_google_api_service_uses_requested_api_for_service_account(
         "drive",
         "v3",
         error_cls=RuntimeError,
-        service_account_file=service_account_file,
-        scopes=["https://www.googleapis.com/auth/drive"],
+        token_file=token_file,
+        scopes=GOOGLE_OAUTH_SCOPES,
     )
 
     assert service == "drive-service"
-    assert calls["build"] == (
-        "drive",
-        "v3",
-        "service-account-creds",
-        False,
+    assert calls["build"] == ("drive", "v3", ANY, False)
+
+
+def test_missing_token_and_credentials_message(tmp_path, monkeypatch):
+    """Missing OAuth files should point users at browser authorization setup."""
+    install_fake_google_modules(monkeypatch)
+    auth_config = GoogleAuthConfig(
+        client_secret_file=tmp_path / "google_client_secret.json",
+        token_file=tmp_path / "google_token.json",
     )
 
-
-def test_build_google_sheets_service_missing_credentials_message(tmp_path, monkeypatch):
-    """Missing Google auth files should point users at service-account setup."""
-    install_fake_google_modules(monkeypatch)
-    with pytest.raises(RuntimeError, match="google_service_account.json"):
-        build_google_sheets_service(
-            error_cls=RuntimeError,
-            service_account_file=tmp_path / "google_service_account.json",
-        )
+    with pytest.raises(RuntimeError, match="google_client_secret.json"):
+        build_google_sheets_service(error_cls=RuntimeError, auth_config=auth_config)
 
 
-def test_build_google_sheets_service_uses_configured_shared_credentials(
+def test_missing_token_runs_browser_authorization_when_credentials_exist(
     tmp_path, monkeypatch
 ):
-    """Sheets should use the configured shared service-account key."""
-    service_account_file = tmp_path / "google_service_account.json"
-    drive_token_file = tmp_path / "google_token.json"
-    service_account_file.write_text("{}", encoding="utf-8")
-    auth_config = GoogleAuthConfig(
-        service_account_file=service_account_file,
-        drive_token_file=drive_token_file,
-    )
+    """The one-time OAuth flow should create google_token.json."""
+    client_secret_file = tmp_path / "google_client_secret.json"
+    token_file = tmp_path / "google_token.json"
+    client_secret_file.write_text("{}", encoding="utf-8")
     calls: dict[str, object] = {}
 
-    def fake_from_service_account_file(filename, scopes):
-        calls["service_account_file"] = Path(filename)
-        return "service-account-creds"
+    class CreatedCredentials:
+        def to_json(self):
+            return '{"type":"authorized_user","scopes":["scope"]}'
+
+    class FakeFlow:
+        def run_local_server(self, **kwargs):
+            calls["run_local_server"] = kwargs
+            return CreatedCredentials()
+
+    def fake_flow_factory(filename, scopes):
+        calls["client_secret_file"] = Path(filename)
+        calls["scopes"] = scopes
+        return FakeFlow()
+
+    install_fake_google_modules(monkeypatch, flow_factory=fake_flow_factory)
+
+    created = authorize_google_oauth(
+        client_secret_file=client_secret_file,
+        token_file=token_file,
+        scopes=["scope"],
+    )
+
+    assert created == token_file
+    assert calls["client_secret_file"] == client_secret_file
+    assert calls["scopes"] == ["scope"]
+    assert calls["run_local_server"] == {
+        "port": 0,
+        "access_type": "offline",
+        "prompt": "consent",
+    }
+    assert token_file.read_text(encoding="utf-8") == (
+        '{"type":"authorized_user","scopes":["scope"]}'
+    )
+
+
+def test_expired_token_refreshes_and_rewrites_file(tmp_path, monkeypatch):
+    """Expired tokens should refresh automatically and persist the new token."""
+    token_file = tmp_path / "google_token.json"
+    write_token(token_file)
+
+    class ExpiredCredentials:
+        valid = False
+        expired = True
+        refresh_token = "refresh"
+
+        def has_scopes(self, scopes):
+            return True
+
+        def refresh(self, request):
+            self.valid = True
+
+        def to_json(self):
+            return '{"type":"authorized_user","refreshed":true}'
 
     install_fake_google_modules(
         monkeypatch,
-        service_account_loader=fake_from_service_account_file,
+        user_credentials_loader=lambda filename, scopes: ExpiredCredentials(),
     )
 
-    build_google_sheets_service(error_cls=RuntimeError, auth_config=auth_config)
+    creds = load_google_oauth_credentials(
+        error_cls=RuntimeError,
+        token_file=token_file,
+    )
 
-    assert calls["service_account_file"] == service_account_file
+    assert creds.valid is True
+    assert token_file.read_text(encoding="utf-8") == (
+        '{"type":"authorized_user","refreshed":true}'
+    )
 
 
-def test_build_google_drive_service_uses_configured_authorized_user_token(
-    tmp_path, monkeypatch
-):
-    """Drive should use its configured authorized-user token."""
-    service_account_file = tmp_path / "google_service_account.json"
-    drive_token_file = tmp_path / "google_token.json"
-    drive_token_file.write_text("{}", encoding="utf-8")
+def test_token_missing_required_scope_has_clear_error(tmp_path, monkeypatch):
+    """Tokens created with too few scopes should fail before API calls."""
+    token_file = tmp_path / "google_token.json"
+    write_token(token_file, scopes=["https://www.googleapis.com/auth/drive"])
+    install_fake_google_modules(monkeypatch)
+
+    with pytest.raises(RuntimeError, match="missing required Google OAuth scope"):
+        build_google_sheets_service(error_cls=RuntimeError, token_file=token_file)
+
+
+def test_google_api_error_message_mentions_disabled_apis():
+    """Disabled Sheets/Drive APIs should have a setup-oriented error."""
+
+    class HttpError(Exception):
+        def __str__(self):
+            return "accessNotConfigured: API has not been used or is disabled"
+
+    message = google_api_error_message(HttpError())
+
+    assert "required API appears disabled" in message
+    assert "Google Sheets API and Google Drive API" in message
+
+
+def test_google_api_error_message_mentions_runtime_scope_failures():
+    """Runtime 403 scope errors should tell users to recreate the token."""
+
+    class HttpError(Exception):
+        def __str__(self):
+            return "Request had insufficient authentication scopes"
+
+    message = google_api_error_message(HttpError())
+
+    assert "google_token.json does not have sufficient Google OAuth scopes" in message
+    assert "authorize again" in message
+
+
+def test_build_google_drive_service_uses_shared_oauth_token(tmp_path, monkeypatch):
+    """Drive should use the same authorized-user token as Sheets."""
+    token_file = tmp_path / "google_token.json"
+    write_token(token_file)
     auth_config = GoogleAuthConfig(
-        service_account_file=service_account_file,
-        drive_token_file=drive_token_file,
+        client_secret_file=tmp_path / "google_client_secret.json",
+        token_file=token_file,
     )
     calls: dict[str, object] = {}
 
     class ValidCredentials:
         valid = True
+        expired = False
+        refresh_token = "refresh"
 
         def has_scopes(self, scopes):
             calls["scopes"] = scopes
@@ -266,55 +395,63 @@ def test_build_google_drive_service_uses_configured_authorized_user_token(
 
     build_google_drive_service(error_cls=RuntimeError, auth_config=auth_config)
 
-    assert calls["token_file"] == drive_token_file
-    assert calls["scopes"] == ["https://www.googleapis.com/auth/drive"]
+    assert calls["token_file"] == token_file
+    assert calls["scopes"] == GOOGLE_OAUTH_SCOPES
 
 
-def test_build_google_drive_service_missing_token_message(tmp_path, monkeypatch):
-    """Missing Drive token files should point users at the token setup."""
-    install_fake_google_modules(monkeypatch)
-    auth_config = GoogleAuthConfig(
-        service_account_file=tmp_path / "google_service_account.json",
-        drive_token_file=tmp_path / "google_token.json",
-    )
-
-    with pytest.raises(RuntimeError, match="google_token.json"):
-        build_google_drive_service(error_cls=RuntimeError, auth_config=auth_config)
-
-
-def test_default_google_auth_config_resolves_shared_env_path(tmp_path, monkeypatch):
-    """Credential path settings should resolve Sheets and Drive files."""
-    monkeypatch.delenv(GOOGLE_SHARED_SERVICE_ACCOUNT_FILE_ENV, raising=False)
+def test_default_google_auth_config_resolves_oauth_env_paths(tmp_path, monkeypatch):
+    """Credential path settings should resolve OAuth files."""
+    monkeypatch.delenv(GOOGLE_CLIENT_SECRET_FILE_ENV, raising=False)
+    monkeypatch.delenv(GOOGLE_TOKEN_FILE_ENV, raising=False)
     monkeypatch.delenv(GOOGLE_DRIVE_TOKEN_FILE_ENV, raising=False)
     settings = EnvSettings(
         local_values={
-            GOOGLE_SHARED_SERVICE_ACCOUNT_FILE_ENV: str(
-                tmp_path / "shared-service-account.json"
-            ),
+            GOOGLE_CLIENT_SECRET_FILE_ENV: str(tmp_path / "client-secret.json"),
+            GOOGLE_TOKEN_FILE_ENV: str(tmp_path / "token.json"),
+        }
+    )
+
+    auth_config = default_google_auth_config(settings)
+
+    assert auth_config.client_secret_file == tmp_path / "client-secret.json"
+    assert auth_config.token_file == tmp_path / "token.json"
+
+
+def test_default_google_auth_config_accepts_legacy_drive_token_env(
+    tmp_path, monkeypatch
+):
+    """The old Drive token env var should still point at the shared token."""
+    monkeypatch.delenv(GOOGLE_CLIENT_SECRET_FILE_ENV, raising=False)
+    monkeypatch.delenv(GOOGLE_TOKEN_FILE_ENV, raising=False)
+    monkeypatch.delenv(GOOGLE_DRIVE_TOKEN_FILE_ENV, raising=False)
+    settings = EnvSettings(
+        local_values={
+            GOOGLE_CLIENT_SECRET_FILE_ENV: str(tmp_path / "client-secret.json"),
             GOOGLE_DRIVE_TOKEN_FILE_ENV: str(tmp_path / "drive-token.json"),
         }
     )
 
     auth_config = default_google_auth_config(settings)
 
-    assert auth_config.service_account_file == (
-        tmp_path / "shared-service-account.json"
-    )
-    assert auth_config.drive_token_file == tmp_path / "drive-token.json"
+    assert auth_config.client_secret_file == tmp_path / "client-secret.json"
+    assert auth_config.token_file == tmp_path / "drive-token.json"
 
 
 def test_default_google_auth_config_resolves_relative_path(monkeypatch):
-    """Relative service-account paths should resolve from the project root."""
-    monkeypatch.delenv(GOOGLE_SHARED_SERVICE_ACCOUNT_FILE_ENV, raising=False)
+    """Relative OAuth paths should resolve from the project root."""
+    monkeypatch.delenv(GOOGLE_CLIENT_SECRET_FILE_ENV, raising=False)
+    monkeypatch.delenv(GOOGLE_TOKEN_FILE_ENV, raising=False)
     monkeypatch.delenv(GOOGLE_DRIVE_TOKEN_FILE_ENV, raising=False)
     settings = EnvSettings(
         local_values={
-            GOOGLE_SHARED_SERVICE_ACCOUNT_FILE_ENV: "credentials/google.json",
-            GOOGLE_DRIVE_TOKEN_FILE_ENV: "credentials/drive-token.json",
+            GOOGLE_CLIENT_SECRET_FILE_ENV: "credentials/client-secret.json",
+            GOOGLE_TOKEN_FILE_ENV: "credentials/google-token.json",
         }
     )
 
     auth_config = default_google_auth_config(settings)
 
-    assert auth_config.service_account_file == PROJECT_ROOT / "credentials/google.json"
-    assert auth_config.drive_token_file == PROJECT_ROOT / "credentials/drive-token.json"
+    assert auth_config.client_secret_file == (
+        PROJECT_ROOT / "credentials/client-secret.json"
+    )
+    assert auth_config.token_file == PROJECT_ROOT / "credentials/google-token.json"

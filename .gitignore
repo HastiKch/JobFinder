@@ -229,11 +229,16 @@ jobs_*.xlsx
 
 # Local Google credentials and tokens
 google_client_secret.json
+google_client_secret*.json
+*client_secret*.json
+*client-secret*.json
 google_service_account*.json
 *service_account*.json
 *service-account*.json
 jobfinder-*.json
 google_token.json
+google_token*.json
+*google_token*.json
 google_spreadsheet_id.txt
 
 # Private evaluator inputs

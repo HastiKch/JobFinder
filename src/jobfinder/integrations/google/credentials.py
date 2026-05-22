@@ -1,4 +1,4 @@
-"""Configuration for Google API credential files."""
+"""Configuration for Google OAuth credential files."""
 
 from __future__ import annotations
 
@@ -7,33 +7,38 @@ from pathlib import Path
 
 from jobfinder.env import EnvSettings
 from jobfinder.paths import (
-    GOOGLE_DRIVE_TOKEN_FILE,
-    GOOGLE_SHARED_SERVICE_ACCOUNT_FILE,
+    GOOGLE_CLIENT_SECRET_FILE,
+    GOOGLE_TOKEN_FILE,
     PROJECT_ROOT,
 )
 
-GOOGLE_SHARED_SERVICE_ACCOUNT_FILE_ENV = "GOOGLE_SERVICE_ACCOUNT_FILE"
+GOOGLE_CLIENT_SECRET_FILE_ENV = "GOOGLE_CLIENT_SECRET_FILE"
+GOOGLE_TOKEN_FILE_ENV = "GOOGLE_TOKEN_FILE"
+
 GOOGLE_DRIVE_TOKEN_FILE_ENV = "GOOGLE_DRIVE_TOKEN_FILE"
+"""Deprecated token-file env var kept as a fallback for older local setups."""
+
+GOOGLE_OAUTH_SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+]
+"""Scopes required for Google Sheets reads/writes and Drive PDF uploads."""
 
 
 @dataclass(frozen=True)
 class GoogleAuthConfig:
-    """Resolved local credential files for Google API clients."""
+    """Resolved local OAuth credential files for Google API clients."""
 
-    service_account_file: Path
-    drive_token_file: Path
-
-    def service_account_file_for(self, service_name: str) -> Path:
-        """Return the configured Google Sheets service-account key."""
-        return self.service_account_file
+    client_secret_file: Path
+    token_file: Path
 
 
 @dataclass(frozen=True)
 class GoogleCredentialFiles:
     """Credential files used to initialize one Google API client."""
 
-    service_account_file: Path
-    drive_token_file: Path
+    client_secret_file: Path
+    token_file: Path
 
 
 def resolve_google_credential_path(value: str, *, root: Path = PROJECT_ROOT) -> Path:
@@ -47,19 +52,21 @@ def resolve_google_credential_path(value: str, *, root: Path = PROJECT_ROOT) -> 
 def default_google_auth_config(env: EnvSettings | None = None) -> GoogleAuthConfig:
     """Return Google credential file settings from env and repository defaults."""
     settings = env or EnvSettings()
-    shared_service_account_value = settings.get(GOOGLE_SHARED_SERVICE_ACCOUNT_FILE_ENV)
-    drive_token_value = settings.get(GOOGLE_DRIVE_TOKEN_FILE_ENV)
+    client_secret_value = settings.get(GOOGLE_CLIENT_SECRET_FILE_ENV)
+    token_value = settings.get(GOOGLE_TOKEN_FILE_ENV) or settings.get(
+        GOOGLE_DRIVE_TOKEN_FILE_ENV
+    )
 
     return GoogleAuthConfig(
-        service_account_file=(
-            resolve_google_credential_path(shared_service_account_value)
-            if shared_service_account_value
-            else GOOGLE_SHARED_SERVICE_ACCOUNT_FILE
+        client_secret_file=(
+            resolve_google_credential_path(client_secret_value)
+            if client_secret_value
+            else GOOGLE_CLIENT_SECRET_FILE
         ),
-        drive_token_file=(
-            resolve_google_credential_path(drive_token_value)
-            if drive_token_value
-            else GOOGLE_DRIVE_TOKEN_FILE
+        token_file=(
+            resolve_google_credential_path(token_value)
+            if token_value
+            else GOOGLE_TOKEN_FILE
         ),
     )
 
@@ -68,13 +75,12 @@ def google_credential_files_for(
     service_name: str,
     *,
     auth_config: GoogleAuthConfig | None = None,
-    service_account_file: Path | None = None,
-    drive_token_file: Path | None = None,
+    client_secret_file: Path | None = None,
+    token_file: Path | None = None,
 ) -> GoogleCredentialFiles:
     """Resolve credential files for one Google API service."""
     config = auth_config or default_google_auth_config()
     return GoogleCredentialFiles(
-        service_account_file=service_account_file
-        or config.service_account_file_for(service_name),
-        drive_token_file=drive_token_file or config.drive_token_file,
+        client_secret_file=client_secret_file or config.client_secret_file,
+        token_file=token_file or config.token_file,
     )
