@@ -77,9 +77,7 @@ def richness_score(job: NormalizedJob) -> tuple[int, int, int]:
 def best_text(values: list[str], *, prefer_longer: bool = False) -> str:
     """Choose a deterministic best text field."""
     candidates = [
-        (idx, value)
-        for idx, value in enumerate(values)
-        if is_meaningful(value)
+        (idx, value) for idx, value in enumerate(values) if is_meaningful(value)
     ]
     if not candidates:
         return ""
