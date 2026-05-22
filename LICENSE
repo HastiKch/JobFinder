@@ -1,0 +1,102 @@
+JobFinder Development Non-Commercial License
+
+Copyright (c) 2026 Amirhossein Donyadidegan
+
+This license applies to the JobFinder software, documentation, and related
+materials in this repository (the "Software").
+
+1. Purpose
+
+The Software is made available during development so that people may inspect it,
+evaluate it, provide feedback, suggest ideas, and use it for free for
+non-commercial purposes only.
+
+2. Non-Commercial License Grant
+
+Subject to this license, the copyright holder grants you a limited, worldwide,
+royalty-free, non-exclusive, non-transferable, revocable license to:
+
+- view, copy, and run the Software;
+- modify the Software for personal, educational, research, evaluation,
+  development, or feedback purposes; and
+- share copies or modified copies of the Software only for non-commercial
+  purposes, provided that this license and copyright notice are included.
+
+3. Commercial Use Is Forbidden
+
+You may not use the Software, or any modified version or derivative work based
+on it, for commercial purposes without a separate written commercial license
+from the copyright holder.
+
+Commercial use includes, without limitation:
+
+- selling, licensing, sublicensing, renting, or otherwise monetizing the
+  Software;
+- offering the Software as a paid product, paid service, hosted service, or part
+  of a paid service;
+- using the Software for paid consulting, client work, recruiting services,
+  staffing services, job-search services, or other business services;
+- using the Software inside a company or organization for business operations or
+  commercial advantage; or
+- including the Software in any product, workflow, platform, or service that is
+  sold, monetized, or used to generate revenue.
+
+4. Future Commercialization
+
+The copyright holder may later change the licensing terms, stop offering the
+Software for free, or offer the Software commercially.
+
+This license does not give you any permanent right to keep using the Software
+for free after the copyright holder changes the licensing terms, publishes a
+termination notice, or otherwise notifies you that free use is no longer
+permitted. After such notice, you must stop using, copying, modifying, sharing,
+or distributing the Software unless you receive a new license from the copyright
+holder.
+
+5. Contributions, Feedback, and Ideas
+
+If you submit feedback, ideas, issues, pull requests, code, documentation, or
+other contributions, you grant the copyright holder a perpetual, worldwide,
+irrevocable, royalty-free, sublicensable license to use, copy, modify, publish,
+distribute, relicense, and commercialize those contributions in any version of
+the Software or related products.
+
+You represent that you have the right to grant this license for anything you
+submit.
+
+6. Ownership
+
+The Software is licensed, not sold. The copyright holder keeps all rights,
+title, and interest in the Software except for the limited permissions expressly
+granted in this license. All rights not expressly granted are reserved.
+
+7. No Trademark Rights
+
+This license does not grant permission to use the copyright holder's name,
+project names, logos, or trademarks except as necessary to identify the origin
+of the Software.
+
+8. Third-Party Materials
+
+Third-party libraries, services, APIs, datasets, and other materials may be
+covered by their own licenses or terms. This license does not change those
+third-party terms.
+
+9. Termination
+
+If you violate this license, your rights under it terminate automatically. Upon
+termination, you must stop using, copying, modifying, sharing, and distributing
+the Software and must delete or destroy all copies in your possession or
+control, except where retention is required by law.
+
+10. Disclaimer of Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS" AND WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE, TITLE, AND NON-INFRINGEMENT.
+
+11. Limitation of Liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE COPYRIGHT HOLDER WILL NOT BE LIABLE
+FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY ARISING FROM OR RELATED TO THE
+SOFTWARE OR THIS LICENSE, WHETHER IN CONTRACT, TORT, OR OTHERWISE.
