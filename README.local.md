@@ -37,6 +37,7 @@ while the job is running.
 - An Apify API token.
 - An OpenAI API key when running evaluation.
 - A Google service account and Google Sheet when using the full pipeline.
+- A Google Drive authorized-user token when saving generated CV PDFs.
 - A local clone of this repository.
 
 Run all commands from the repository root.
@@ -177,7 +178,7 @@ Common settings:
 The full local pipeline always writes to Google Sheets before evaluating jobs.
 Use the scraper-only command if you only want a local Excel file.
 
-Use one Google service account for both Google Sheets and Google Drive access:
+Use a Google service account for Google Sheets:
 
 1. Open Google Cloud Console.
 2. Enable the Google Sheets API and Google Drive API.
@@ -186,8 +187,6 @@ Use one Google service account for both Google Sheets and Google Drive access:
 5. Create and download a JSON key for that service account.
 6. Copy the `client_email` value from the JSON key.
 7. Open your target Google Sheet and share it with that email as Editor.
-8. Share a Google Drive folder named `JobFinder` with that email as Editor, or
-   let JobFinder create it for the service account.
 
 Save the downloaded JSON key in this repository as:
 
@@ -223,8 +222,39 @@ The spreadsheet ID is:
 1abcDEFghiJKLmnop123
 ```
 
-Do not commit Google credential files or `google_spreadsheet_id.txt`. This repo
-uses only the service-account key for Google access.
+Use an authorized-user token for Google Drive PDF uploads:
+
+1. In Google Cloud, open the OAuth consent screen.
+2. Set the app publishing status to Production. Testing-mode refresh tokens
+   expire after 7 days.
+3. Create an OAuth client of type Desktop app.
+4. Download the client JSON locally as `google_client_secret.json`.
+5. Run this once from the repository:
+
+   ```bash
+   env PYTHONPATH=src python - <<'PY'
+from pathlib import Path
+
+from google_auth_oauthlib.flow import InstalledAppFlow
+
+from jobfinder.integrations.google.client import write_private_text_file
+from jobfinder.integrations.google.drive import GOOGLE_DRIVE_SCOPES
+
+flow = InstalledAppFlow.from_client_secrets_file(
+    "google_client_secret.json",
+    GOOGLE_DRIVE_SCOPES,
+)
+creds = flow.run_local_server(port=0, prompt="consent")
+write_private_text_file(Path("google_token.json"), creds.to_json())
+print("Created google_token.json")
+PY
+   ```
+
+`google_token.json` is the Drive credential JobFinder uses locally. The
+temporary `google_client_secret.json` file is only needed to create or recreate
+that token.
+
+Do not commit Google credential files or `google_spreadsheet_id.txt`.
 
 ## 5. Run A Preflight Check
 
@@ -295,8 +325,8 @@ python job_fit_evaluator.py --source excel --sheet latest
 |---|---|
 | `Missing required setting(s): APIFY_API_TOKEN` | Add `APIFY_API_TOKEN` to `.env` or your shell environment. |
 | `Missing required setting(s): OPENAI_API_KEY` | Add `OPENAI_API_KEY`, or run with `--mode scrape_only`. |
-| Google authentication fails | Confirm `google_service_account.json` is a service-account key and the sheet is shared with its `client_email` as Editor. |
-| PDF upload fails | Enable the Google Drive API and share the `JobFinder` Drive folder with the service-account email as Editor. |
+| Google Sheets authentication fails | Confirm `google_service_account.json` is a service-account key and the sheet is shared with its `client_email` as Editor. |
+| PDF upload fails | Confirm `google_token.json` exists, the Drive API is enabled, and the OAuth app is published to Production. |
 | `LaTeX compilation failed` in `AI CV PDF` | Install `latexmk` and `xelatex`, check the generated LaTeX, and make sure `JOB_EVAL_CV_PHOTO_FILE` points to any referenced photo. |
 | Spreadsheet not found | Check that `GOOGLE_SPREADSHEET_ID` is only the spreadsheet ID, not the full URL. |
 | Scraper writes Excel but pipeline fails | The full pipeline forces Google Sheets; complete the Google Sheets setup first. |
@@ -312,10 +342,12 @@ and should stay local:
 
 ```text
 .env
+google_client_secret.json
 google_service_account*.json
 *service_account*.json
 *service-account*.json
 jobfinder-*.json
+google_token.json
 google_spreadsheet_id.txt
 configs/keywords.txt
 prompts/master_prompt.txt

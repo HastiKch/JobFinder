@@ -10,10 +10,12 @@ from jobfinder.integrations.google.client import (
     DEFAULT_GOOGLE_API_TIMEOUT_SECONDS,
     build_authorized_http,
     build_google_api_service,
+    build_google_drive_oauth_service,
     build_google_service,
     google_api_retries,
     google_api_timeout_seconds,
     google_execute,
+    write_private_text_file,
 )
 from jobfinder.integrations.google.sheets import (
     GOOGLE_SHEETS_SCOPES,
@@ -31,10 +33,12 @@ __all__ = [
     "GOOGLE_SHEETS_SCOPES",
     "build_authorized_http",
     "build_google_api_service",
+    "build_google_drive_oauth_service",
     "build_google_service",
     "build_google_sheets_service",
     "google_api_retries",
     "google_api_timeout_seconds",
     "google_execute",
     "quote_sheet_name",
+    "write_private_text_file",
 ]

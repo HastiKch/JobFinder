@@ -41,7 +41,7 @@ Key capabilities:
 - Deterministic cross-provider deduplication without AI.
 - Historical duplicate suppression through Google Sheets run history.
 - Scheduled and manual GitHub Actions pipeline runs.
-- Single service-account Google Sheets and Drive integration.
+- Service-account Google Sheets integration and authorized-user Google Drive uploads.
 - OpenAI-based job-fit evaluation with prompt and CV injection.
 - LaTeX PDF generation for tailored CVs, with Google Drive links in the sheet.
 - Incremental evaluator saves for crash recovery.
@@ -221,8 +221,8 @@ Default evaluator policy:
 - LaTeX tooling for evaluator PDF output: `latexmk` and `xelatex`.
 - Apify API token for scraping.
 - OpenAI API key for `scrape_and_evaluate` or evaluator-only runs.
-- Google service account, editable Google Sheet, and Google Drive access for
-  saved PDFs.
+- Google service account for Sheets, editable Google Sheet, and a Google Drive
+  authorized-user token for saved PDFs.
 - Optional local Excel workflow through `openpyxl`.
 
 Install runtime dependencies with Conda:
@@ -333,23 +333,42 @@ JOB_EVAL_OPENAI_MODEL=gpt-5-mini
 
 ### Google Sheets And Drive Setup
 
-JobFinder uses one permanent Google service account for both Google Sheets and
-Google Drive:
+JobFinder uses one permanent method for each Google service:
+
+- Google Sheets: service account.
+- Google Drive PDF uploads: authorized-user token from your Google account.
+
+The Drive token is the stable OAuth method when the app is published to
+Production in Google Cloud. It avoids the 7-day testing-mode refresh-token
+expiry and avoids the service-account Drive storage-quota failure.
+
+Set up Google Sheets:
 
 1. Enable the Google Sheets API and Google Drive API in Google Cloud.
 2. Create a service account.
 3. Download a JSON key.
 4. Share the target Google Sheet with the service account's `client_email` as
    Editor.
-5. Share an existing Google Drive folder named `JobFinder` with the same service
-   account as Editor, or let JobFinder create that folder in the service
-   account's Drive.
-6. Save the key locally as `google_service_account.json`.
-7. Set `GOOGLE_SPREADSHEET_ID` or save the ID in `google_spreadsheet_id.txt`.
+5. Save the key locally as `google_service_account.json`.
+6. Set `GOOGLE_SPREADSHEET_ID` or save the ID in `google_spreadsheet_id.txt`.
 
 You can point at a differently named service-account key with
-`GOOGLE_SERVICE_ACCOUNT_FILE`, but it is still the same single service-account
-method. No other Google credential files are used by this project.
+`GOOGLE_SERVICE_ACCOUNT_FILE`, but Sheets still uses the same service-account
+method.
+
+Set up Google Drive:
+
+1. In Google Cloud, configure the OAuth consent screen and publish the app to
+   Production.
+2. Create an OAuth client of type Desktop app.
+3. Download the client JSON locally as `google_client_secret.json`.
+4. Run the one-time Drive authorization command from `README.local.md` to create
+   `google_token.json`.
+5. The Drive parent folder defaults to `JobFinder`; JobFinder creates it in the
+   authorized Google Drive account when needed.
+
+For GitHub Actions, paste the contents of `google_token.json` into the
+`GOOGLE_DRIVE_TOKEN_JSON` secret.
 
 ## Quick Start
 
@@ -651,7 +670,8 @@ Required GitHub secrets:
 | `APIFY_API_TOKEN` | all runs | One token or up to 12 semicolon-separated fallback tokens. |
 | `OPENAI_API_KEY` | `scrape_and_evaluate` | OpenAI API key. |
 | `GOOGLE_SPREADSHEET_ID` | all runs | Target spreadsheet ID. |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | all runs | Full service-account JSON key. |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | all runs | Full service-account JSON key for Google Sheets. |
+| `GOOGLE_DRIVE_TOKEN_JSON` | `scrape_and_evaluate` | Full authorized-user token JSON from `google_token.json` for Drive PDF uploads. |
 | `JOB_KEYWORDS_TEXT` | all runs | Full private keyword file content. |
 | `MASTER_PROMPT_TEXT` | `scrape_and_evaluate` | Full private evaluator prompt. |
 | `MASTER_CV_TEX` | `scrape_and_evaluate` | Full private LaTeX CV. |
@@ -784,8 +804,8 @@ cleanup, run the relevant focused tests plus the full suite.
 | Apify 401/403/402 failures | Invalid token, actor access issue, or billing problem. | Confirm token account can run the configured actor and has billing/trial access. |
 | Apify transient 502/503/504 or timeout | Actor/API instability or too much concurrency. | Lower search concurrency, lower per-search limits, or increase timeout. |
 | No jobs found | Search/filter window too narrow or provider config mismatch. | Check keywords, provider source, posted-time window, Stepstone location/start URLs, and final filters. |
-| Google auth fails | Wrong credential type or missing Sheet permission. | Use service-account JSON and share the sheet with its `client_email` as Editor. |
-| Drive upload fails | Drive API disabled or folder not shared with the service account. | Enable Google Drive API and share the `JobFinder` folder as Editor, or allow the service account to create it. |
+| Google Sheets auth fails | Wrong credential type or missing Sheet permission. | Use service-account JSON and share the sheet with its `client_email` as Editor. |
+| Drive upload fails | Missing/invalid `google_token.json`, Drive API disabled, or token missing Drive scope. | Recreate the authorized-user token with Drive access and make sure the OAuth app is published to Production. |
 | Spreadsheet not found | Full URL pasted instead of ID, or wrong account. | Use only the ID from `/spreadsheets/d/<id>/`. |
 | CV PDF cell shows `LaTeX compilation failed` | Missing LaTeX package, invalid generated LaTeX, or missing referenced photo. | Install `latexmk` and `xelatex`, check the generated LaTeX, and ensure `JOB_EVAL_CV_PHOTO_FILE` points to the expected image. |
 | Evaluator skips rows | `AI Verdict` already exists and is not `Error`. | Clear the verdict cells or create a fresh run tab. |
@@ -845,10 +865,12 @@ Never commit:
 
 ```text
 .env
+google_client_secret.json
 google_service_account*.json
 *service_account*.json
 *service-account*.json
 jobfinder-*.json
+google_token.json
 google_spreadsheet_id.txt
 configs/keywords.txt
 prompts/master_prompt.txt

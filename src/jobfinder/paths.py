@@ -26,10 +26,13 @@ DEFAULT_CV_PHOTO_FILE = PROJECT_ROOT / "cv" / "photo.jpg"
 """Default optional CV photo copied into LaTeX compilation directories."""
 
 GOOGLE_SHARED_SERVICE_ACCOUNT_FILE = PROJECT_ROOT / "google_service_account.json"
-"""Shared Google service-account credentials file used for Sheets and Drive."""
+"""Google Sheets service-account credentials file."""
 
 GOOGLE_SERVICE_ACCOUNT_FILE = GOOGLE_SHARED_SERVICE_ACCOUNT_FILE
-"""Backward-compatible alias for the shared Google service-account file."""
+"""Backward-compatible alias for the Google Sheets service-account file."""
+
+GOOGLE_DRIVE_TOKEN_FILE = PROJECT_ROOT / "google_token.json"
+"""Google Drive authorized-user token cache file."""
 
 GOOGLE_SPREADSHEET_ID_FILE = PROJECT_ROOT / "google_spreadsheet_id.txt"
 """Google spreadsheet ID cache file."""

@@ -140,7 +140,7 @@ into the temp directory before compilation. Compilation errors are written to
 
 Successful PDFs are uploaded to a new timestamped folder named
 `YYYY-MM-DD_HH-MM-SS` inside a Google Drive parent folder named `JobFinder` by
-default. The same Google service-account credentials are used for Drive.
+default. Drive uploads use the authorized-user token in `google_token.json`.
 
 ## Rejection Row Policy
 

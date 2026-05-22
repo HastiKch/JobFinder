@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from jobfinder.integrations.google.client import (
-    build_google_api_service,
+    build_google_drive_oauth_service,
     google_execute,
 )
 from jobfinder.integrations.google.credentials import GoogleAuthConfig
@@ -39,13 +39,14 @@ class DriveFile:
 def build_google_drive_service(
     *,
     error_cls: type[RuntimeError],
+    token_file: Path | None = None,
     auth_config: GoogleAuthConfig | None = None,
 ) -> Any:
-    """Build a service-account-authenticated Google Drive API service."""
-    return build_google_api_service(
-        "drive",
+    """Build an authorized-user Google Drive API service."""
+    return build_google_drive_oauth_service(
         "v3",
         error_cls=error_cls,
+        token_file=token_file,
         auth_config=auth_config,
         scopes=GOOGLE_DRIVE_SCOPES,
     )
