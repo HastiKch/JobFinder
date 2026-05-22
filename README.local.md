@@ -235,6 +235,16 @@ For generated CV PDFs, create or choose a Drive folder and set its folder ID:
 JOB_EVAL_CV_DRIVE_FOLDER_ID=1abcDEFghiJKLmnop123FolderId
 ```
 
+Verify the local Google connection:
+
+```bash
+env PYTHONPATH=src python -m jobfinder.google_auth --check
+```
+
+The check reads the configured spreadsheet and Drive folder, creates a temporary
+spreadsheet, writes and reads values, uploads a tiny temporary PDF to the Drive
+folder, and deletes both temporary files.
+
 Do not commit Google credential files or `google_spreadsheet_id.txt`.
 
 ## 5. Run A Preflight Check

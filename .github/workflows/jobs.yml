@@ -295,6 +295,26 @@ jobs:
               )
               sys.exit(1)
 
+          raw_scopes = google_token.get("scopes") or google_token.get("scope") or []
+          if isinstance(raw_scopes, str):
+              scopes = set(raw_scopes.split())
+          elif isinstance(raw_scopes, list):
+              scopes = {str(scope) for scope in raw_scopes}
+          else:
+              scopes = set()
+          required_scopes = {
+              "https://www.googleapis.com/auth/spreadsheets",
+              "https://www.googleapis.com/auth/drive",
+          }
+          missing_scopes = sorted(required_scopes - scopes)
+          if missing_scopes:
+              print(
+                  "::error::GOOGLE_TOKEN_JSON is missing required OAuth scope(s): "
+                  + ", ".join(missing_scopes)
+                  + ". Recreate google_token.json with python -m jobfinder.google_auth."
+              )
+              sys.exit(1)
+
           Path("google_token.json").write_text(google_token_json, encoding="utf-8")
 
           if spreadsheet_id:

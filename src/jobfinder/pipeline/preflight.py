@@ -8,6 +8,10 @@ from pathlib import Path
 from jobfinder.env import EnvSettings
 from jobfinder.evaluator.parsing import read_text_asset
 from jobfinder.evaluator.storage import read_google_spreadsheet_id
+from jobfinder.integrations.google.drive import (
+    build_google_drive_service,
+    get_drive_folder,
+)
 from jobfinder.paths import DEFAULT_CV_FILE, DEFAULT_MASTER_PROMPT_FILE
 from jobfinder.scraper.export_google_sheets import build_scraper_google_sheets_service
 from jobfinder.scraper.run_history import load_google_spreadsheet_context
@@ -48,6 +52,8 @@ def run_preflight(env: EnvSettings, *, should_evaluate: bool) -> PreflightResult
                 "Google Drive folder where generated CV PDFs should be uploaded, "
                 "or set JOB_EVAL_CV_PDF_OUTPUT=false."
             )
+        if env.get_bool("JOB_EVAL_CV_PDF_OUTPUT", True):
+            validate_google_drive_folder(env)
         read_google_spreadsheet_id(env.get("JOB_EVAL_GOOGLE_SPREADSHEET_ID"))
         evaluation_inputs_ready = True
 
@@ -64,4 +70,12 @@ def validate_google_sheets(settings: ScraperSettings) -> bool:
     """Validate Google Sheets credentials and spreadsheet access."""
     service = build_scraper_google_sheets_service()
     load_google_spreadsheet_context(settings, service, seed_seen_jobs_index=False)
+    return True
+
+
+def validate_google_drive_folder(env: EnvSettings) -> bool:
+    """Validate Google Drive credentials and configured PDF folder access."""
+    folder_id = env.get("JOB_EVAL_CV_DRIVE_FOLDER_ID")
+    service = build_google_drive_service(error_cls=RuntimeError)
+    get_drive_folder(service, folder_id)
     return True

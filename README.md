@@ -352,6 +352,7 @@ Set up OAuth once:
    new `jobs` spreadsheet in the authorized user's Drive account.
 7. Set `JOB_EVAL_CV_DRIVE_FOLDER_ID` to the Drive folder ID where timestamped
    PDF run folders should be created.
+8. Verify locally with `env PYTHONPATH=src python -m jobfinder.google_auth --check`.
 
 For GitHub Actions, paste the contents of `google_token.json` into the
 `GOOGLE_TOKEN_JSON` secret and set `JOB_EVAL_CV_DRIVE_FOLDER_ID`.

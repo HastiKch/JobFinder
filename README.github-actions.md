@@ -115,6 +115,12 @@ GOOGLE_TOKEN_JSON
 The token account must own or have edit access to the target Google Sheet and
 the Drive folder used for generated PDFs.
 
+Before copying the token to GitHub, verify it locally:
+
+```bash
+env PYTHONPATH=src python -m jobfinder.google_auth --check
+```
+
 ## 4. Choose A Google Drive Folder
 
 Create or choose the Drive folder that should contain timestamped PDF run
@@ -156,6 +162,16 @@ pbcopy < google_token.json
 ```
 
 Paste each copied value into the matching GitHub secret.
+
+Confirm the Google secret names exist:
+
+```bash
+gh secret list
+```
+
+The workflow validates that `GOOGLE_TOKEN_JSON` has both Sheets and Drive
+scopes, writes it to `google_token.json` on the runner, and preflight-checks the
+configured Google Sheet and Drive folder before the pipeline work starts.
 
 If your LaTeX CV references a private photo and you do not commit a public
 `cv/photo.jpg`, encode it for the optional `CV_PHOTO_BASE64` secret:
