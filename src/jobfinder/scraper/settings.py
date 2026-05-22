@@ -65,7 +65,6 @@ SOURCE_ALIASES = {
     "stepstone_de": {"stepstone"},
     "stepstone-de": {"stepstone"},
     "ss": {"stepstone"},
-    "both": {"linkedin", "indeed"},
     "all": {"linkedin", "indeed", "stepstone"},
 }
 OUTPUT_MODE_ALIASES = {

@@ -67,8 +67,8 @@ The pipeline CLI overrides this to `google_sheets`.
 
 ## Source Selection
 
-`JOBFINDER_SCRAPER_SOURCES` supports `linkedin`, `indeed`, `stepstone`, `both`, `all`,
-and comma-separated source names.
+`JOBFINDER_SCRAPER_SOURCES` supports `linkedin`, `indeed`, `stepstone`, `all`, and
+comma-separated source names.
 
 For each selected source:
 

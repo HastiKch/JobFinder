@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent / "src"))
 
-from jobfinder.config_files import (  # noqa: E402,F401
+from jobfinder.config_files import (
     ConfigFileError,
     config_int,
     config_list,
@@ -20,3 +20,13 @@ from jobfinder.config_files import (  # noqa: E402,F401
     load_filter_config,
     load_keywords,
 )
+
+__all__ = [
+    "ConfigFileError",
+    "config_int",
+    "config_list",
+    "config_section",
+    "config_str",
+    "load_filter_config",
+    "load_keywords",
+]

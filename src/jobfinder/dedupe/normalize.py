@@ -141,6 +141,7 @@ TRACKING_QUERY_KEYS = {
     "trackingid",
 }
 TOKEN_RE = re.compile(r"[a-z0-9]+(?:[+#][a-z0-9]+)?")
+WHITESPACE_RE = re.compile(r"\s+")
 HYPERLINK_RE = re.compile(
     r'^=HYPERLINK\("(?P<url>(?:[^"]|"")*)"\s*[,;]\s*"',
     re.IGNORECASE,
@@ -218,7 +219,7 @@ def is_meaningful(value: Any) -> bool:
 
 def normalize_space(value: str) -> str:
     """Collapse whitespace and trim."""
-    return re.sub(r"\s+", " ", value).strip()
+    return WHITESPACE_RE.sub(" ", value).strip()
 
 
 def ascii_fold(value: str) -> str:
@@ -238,9 +239,9 @@ def unique_ordered(values: list[str] | tuple[str, ...]) -> tuple[str, ...]:
     result: list[str] = []
     for value in values:
         text = normalize_space(str(value or ""))
-        if not text or text.casefold() in MISSING_VALUES:
-            continue
         key = text.casefold()
+        if not text or key in MISSING_VALUES:
+            continue
         if key in seen:
             continue
         seen.add(key)
@@ -391,9 +392,7 @@ def canonical_url(value: Any) -> str:
     if not parsed.scheme or not parsed.netloc:
         return ""
 
-    host = parsed.netloc.casefold()
-    if host.startswith("www."):
-        host = host[4:]
+    host = parsed.netloc.casefold().removeprefix("www.")
     path = quote(unquote(parsed.path), safe="/:@")
     path = re.sub(r"/+", "/", path).rstrip("/")
 
@@ -536,10 +535,7 @@ def description_from_job(job: dict[str, Any]) -> str:
         value = job.get(key)
         if value is None or isinstance(value, bool):
             continue
-        if isinstance(value, dict | list):
-            text = normalize_space(str(value))
-        else:
-            text = normalize_space(str(value))
+        text = normalize_space(str(value))
         if is_meaningful(text):
             return text
     return ""
@@ -715,9 +711,8 @@ def normalize_job(
         ]
     )
     salary = parse_salary(salary_text_from_job(job))
-    remote_mode = remote_mode_from_text(
-        " ".join([title, location, description_from_job(job)])
-    )
+    description = description_from_job(job)
+    remote_mode = remote_mode_from_text(" ".join([title, location, description]))
     blocking_keys = build_blocking_keys(
         apply_url_key=apply_url_key,
         normalized_company=normalized_company,
@@ -754,7 +749,7 @@ def normalize_job(
         company=company,
         location=location,
         job_type=job_type,
-        description=description_from_job(job),
+        description=description,
         posted_at=posted_at_from_job(job),
         salary=salary,
         remote_mode=remote_mode,

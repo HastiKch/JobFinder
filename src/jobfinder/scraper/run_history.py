@@ -319,9 +319,9 @@ def split_source_values(source: Any) -> list[str]:
     if not text:
         return ["unknown"]
     values = [
-        normalize_identity_value(part)
+        normalized
         for part in re.split(r"\s*\|\s*", text)
-        if normalize_identity_value(part)
+        if (normalized := normalize_identity_value(part))
     ]
     return values or ["unknown"]
 
@@ -387,6 +387,9 @@ def job_identity_keys_from_values(
     posted: Any = "",
 ) -> set[str]:
     """Build all useful duplicate keys from normalized row/job values."""
+    # Provider IDs and job-board URLs are accepted for legacy callers but are
+    # intentionally excluded from historical duplicate identity.
+    _ = (job_url, job_id)
     source_keys = split_source_values(source)
     keys: set[str] = set()
 

@@ -79,7 +79,7 @@ def parse_output_mode(settings: ScraperSettings) -> set[str]:
 
 def format_duration(seconds: float) -> str:
     """Format elapsed seconds as a compact human-readable duration."""
-    total_seconds = int(round(seconds))
+    total_seconds = round(seconds)
     hours, remainder = divmod(total_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
 

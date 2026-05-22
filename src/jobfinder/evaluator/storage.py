@@ -9,6 +9,7 @@ from typing import Any
 import openpyxl
 from openpyxl.utils import get_column_letter
 
+from jobfinder.env import EnvSettings
 from jobfinder.evaluator.models import (
     DETAIL_COLUMNS,
     OUTPUT_COLUMNS,
@@ -230,8 +231,6 @@ def read_google_spreadsheet_id(cli_value: str) -> str:
     if cli_value:
         return cli_value
 
-    from jobfinder.env import EnvSettings
-
     env_value = EnvSettings().get("GOOGLE_SPREADSHEET_ID")
     if env_value:
         return env_value
@@ -293,18 +292,18 @@ def write_google_output(
                 "values": [[headers[column_idx]]],
             }
         )
-        for evaluation in evaluations.values():
-            data.append(
-                {
-                    "range": (
-                        f"{quote_sheet_name(sheet_name)}!"
-                        f"{column_letter}{evaluation.row_number}"
-                    ),
-                    "values": [[evaluation.value_for_column(column)]],
-                }
-            )
+        data.extend(
+            {
+                "range": (
+                    f"{quote_sheet_name(sheet_name)}!"
+                    f"{column_letter}{evaluation.row_number}"
+                ),
+                "values": [[evaluation.value_for_column(column)]],
+            }
+            for evaluation in evaluations.values()
+        )
 
-    for idx in range(0, len(data), 500):
+    for idx in range(0, len(data), GOOGLE_BATCH_REQUEST_CHUNK_SIZE):
         google_execute(
             service.spreadsheets()
             .values()
@@ -312,7 +311,7 @@ def write_google_output(
                 spreadsheetId=spreadsheet_id,
                 body={
                     "valueInputOption": "RAW",
-                    "data": data[idx : idx + 500],
+                    "data": data[idx : idx + GOOGLE_BATCH_REQUEST_CHUNK_SIZE],
                 },
             )
         )

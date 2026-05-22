@@ -11,9 +11,14 @@ from urllib.parse import parse_qs, urlparse
 
 from jobfinder.providers.apify_client import run_actor
 from jobfinder.providers.normalization import (
+    append_metadata_block,
     clean_scalar_text,
     first_text,
+    format_money,
     nested_text,
+    parse_salary_number,
+    populated_metadata_dict,
+    seconds_from_published_at,
     unique,
     values_from_shape,
 )
@@ -156,11 +161,7 @@ class IndeedMetadata:
 
     def as_dict(self) -> dict[str, Any]:
         """Return only populated metadata values."""
-        values: dict[str, Any] = {}
-        for key, value in self.__dict__.items():
-            if value:
-                values[key] = list(value) if isinstance(value, tuple) else value
-        return values
+        return populated_metadata_dict(self)
 
     def description_lines(self) -> list[str]:
         """Return concise metadata lines that improve evaluator context."""
@@ -200,18 +201,6 @@ def base_url(settings: ScraperSettings) -> str:
 def clamp_actor_limit(value: int) -> int:
     """Clamp requested result counts to the actor-supported range."""
     return min(INDEED_MAX_LIMIT, max(1, value))
-
-
-def seconds_from_published_at(value: str) -> int | None:
-    """Parse LinkedIn-style ``rSECONDS`` windows used by scraper settings."""
-    text = (value or "").strip().casefold()
-    if not text.startswith("r"):
-        return None
-    try:
-        seconds = int(text[1:])
-    except ValueError:
-        return None
-    return seconds if seconds > 0 else None
 
 
 def date_posted_filter(settings: ScraperSettings) -> str:
@@ -393,24 +382,6 @@ def format_salary(value: Any) -> str:
     return ", ".join(unique(values_from_shape(value)))
 
 
-def parse_salary_number(value: Any) -> float | None:
-    """Parse numeric salary values from actor output."""
-    if value in (None, "") or isinstance(value, bool):
-        return None
-    try:
-        number = float(str(value).replace(",", "").strip())
-    except ValueError:
-        return None
-    return number if number >= 0 else None
-
-
-def format_money(value: float) -> str:
-    """Format a salary number without unnecessary decimals."""
-    if value.is_integer():
-        return f"{int(value):,}"
-    return f"{value:,.2f}".rstrip("0").rstrip(".")
-
-
 def salary_unit_label(value: str) -> str:
     """Return a human-friendly salary period label."""
     unit = value.strip().casefold()
@@ -489,13 +460,7 @@ def description_with_metadata(
         "snippet",
     )
     metadata_lines = metadata.description_lines()
-    if not metadata_lines:
-        return description
-
-    metadata_block = "\n".join(f"- {line}" for line in metadata_lines)
-    if description:
-        return f"{description}\n\nIndeed structured metadata:\n{metadata_block}"
-    return f"Indeed structured metadata:\n{metadata_block}"
+    return append_metadata_block(description, "Indeed", metadata_lines)
 
 
 def format_employer_rating(employer: dict[str, Any]) -> str:

@@ -23,8 +23,8 @@ from jobfinder.providers.apify_client import (
 )
 
 __all__ = [
-    "ApifyConfigurationError",
     "ApifyAccountUnavailableError",
+    "ApifyConfigurationError",
     "ApifyRunError",
     "ApifyRunTimeoutError",
     "ApifyTransientError",

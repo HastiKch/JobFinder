@@ -15,6 +15,7 @@ from jobfinder.dedupe.normalize import (
 )
 
 SOURCE_ORDER = ("linkedin", "indeed", "stepstone")
+SOURCE_ORDER_INDEX = {source: idx for idx, source in enumerate(SOURCE_ORDER)}
 DESCRIPTION_FIELDS = (
     "descriptionText",
     "description_text",
@@ -33,8 +34,8 @@ DESCRIPTION_FIELDS = (
 def source_sort_key(label: str) -> tuple[int, str]:
     """Sort source labels in stable product order."""
     key = source_key(label)
-    if key in SOURCE_ORDER:
-        return SOURCE_ORDER.index(key), label
+    if key in SOURCE_ORDER_INDEX:
+        return SOURCE_ORDER_INDEX[key], label
     return len(SOURCE_ORDER), label.casefold()
 
 
@@ -75,15 +76,19 @@ def richness_score(job: NormalizedJob) -> tuple[int, int, int]:
 
 def best_text(values: list[str], *, prefer_longer: bool = False) -> str:
     """Choose a deterministic best text field."""
-    candidates = [value for value in values if is_meaningful(value)]
+    candidates = [
+        (idx, value)
+        for idx, value in enumerate(values)
+        if is_meaningful(value)
+    ]
     if not candidates:
         return ""
     if prefer_longer:
-        return max(candidates, key=lambda value: (len(value), -values.index(value)))
+        return max(candidates, key=lambda item: (len(item[1]), -item[0]))[1]
     return max(
         candidates,
-        key=lambda value: (len(value.split()), len(value), -values.index(value)),
-    )
+        key=lambda item: (len(item[1].split()), len(item[1]), -item[0]),
+    )[1]
 
 
 def best_description(jobs: list[NormalizedJob]) -> str:
@@ -108,7 +113,7 @@ def best_url(provenance: list[Provenance], attr: str) -> str:
     ]
     if not candidates:
         return ""
-    return sorted(candidates, key=lambda item: item[0])[0][1]
+    return min(candidates, key=lambda item: item[0])[1]
 
 
 def best_apply_url(provenance: list[Provenance]) -> str:
@@ -128,7 +133,7 @@ def merge_dicts_by_richness(values: list[Any]) -> dict[str, Any]:
     result: dict[str, Any] = {}
     for value in sorted(
         [item for item in values if isinstance(item, dict)],
-        key=lambda item: len(item),
+        key=len,
     ):
         for key, nested_value in value.items():
             if not is_meaningful(nested_value):

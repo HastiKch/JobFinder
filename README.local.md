@@ -126,7 +126,7 @@ Common settings:
 | Setting | Default | Description |
 |---|---:|---|
 | `APIFY_API_TOKEN` | blank | One Apify token, or 1 to 12 tokens separated by `;` for ordered credit fallback. |
-| `JOBFINDER_SCRAPER_SOURCES` | `linkedin` | Use `linkedin`, `indeed`, `stepstone`, `both`, `all`, or comma-separated source names such as `linkedin,stepstone`. |
+| `JOBFINDER_SCRAPER_SOURCES` | `linkedin` | Use `linkedin`, `indeed`, `stepstone`, `all`, or comma-separated source names such as `linkedin,stepstone`. |
 | `JOBFINDER_SCRAPER_OUTPUT_MODE` | `excel` | Use `excel`, `google_sheets`, or `both`. The full pipeline forces Google Sheets. |
 | `JOBFINDER_PIPELINE_MODE` | `scrape_and_evaluate` | For `run_job_pipeline.py`, use `scrape_only` or `scrape_and_evaluate`. |
 | `JOBFINDER_SCRAPER_SEARCH_CONCURRENCY` | `15` | Number of Apify searches run at the same time. |

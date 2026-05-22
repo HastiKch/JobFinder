@@ -109,3 +109,58 @@ def unique(values: list[str], *, limit: int | None = None) -> tuple[str, ...]:
         if limit is not None and len(output) >= limit:
             break
     return tuple(output)
+
+
+def populated_metadata_dict(metadata: object) -> dict[str, Any]:
+    """Return populated metadata fields, converting tuples for JSON-like output."""
+    values: dict[str, Any] = {}
+    for key, value in vars(metadata).items():
+        if value:
+            values[key] = list(value) if isinstance(value, tuple) else value
+    return values
+
+
+def seconds_from_published_at(value: str) -> int | None:
+    """Parse LinkedIn-style ``rSECONDS`` windows used by provider settings."""
+    text = (value or "").strip().casefold()
+    if not text.startswith("r"):
+        return None
+    try:
+        seconds = int(text[1:])
+    except ValueError:
+        return None
+    return seconds if seconds > 0 else None
+
+
+def parse_salary_number(value: Any) -> float | None:
+    """Parse non-negative numeric salary values from actor output."""
+    if value in (None, "") or isinstance(value, bool):
+        return None
+    try:
+        number = float(str(value).replace(",", "").strip())
+    except ValueError:
+        return None
+    return number if number >= 0 else None
+
+
+def format_money(value: float) -> str:
+    """Format a salary number without unnecessary decimals."""
+    if value.is_integer():
+        return f"{int(value):,}"
+    return f"{value:,.2f}".rstrip("0").rstrip(".")
+
+
+def append_metadata_block(
+    description: str,
+    source_label: str,
+    metadata_lines: list[str],
+) -> str:
+    """Append source metadata lines to a base description."""
+    if not metadata_lines:
+        return description
+
+    metadata_block = "\n".join(f"- {line}" for line in metadata_lines)
+    metadata_text = f"{source_label} structured metadata:\n{metadata_block}"
+    if description:
+        return f"{description}\n\n{metadata_text}"
+    return metadata_text

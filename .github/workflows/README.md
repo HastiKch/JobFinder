@@ -40,7 +40,7 @@ Manual inputs:
 
 | Input | Options |
 |---|---|
-| `sources` | `linkedin`, `indeed`, `stepstone`, `both`, `all` |
+| `sources` | `linkedin`, `indeed`, `stepstone`, `all` |
 | `posted_time_window` | `since_previous_run`, `last_24h`, `last_7d`, `backfill` |
 | `max_applicants` | `50`, `100`, `200`, `no_limit` |
 | `run_mode` | `scrape_and_evaluate`, `scrape_only` |

@@ -207,7 +207,7 @@ def deduplicate_search_results(
     for job in flatten_search_results(all_results):
         candidate_cluster_ids: set[int] = set()
         for key in job.blocking_keys:
-            candidate_cluster_ids.update(blocking_index.get(key, set()))
+            candidate_cluster_ids.update(blocking_index.get(key, ()))
 
         best_decision: MatchDecision | None = None
         best_cluster_id: int | None = None

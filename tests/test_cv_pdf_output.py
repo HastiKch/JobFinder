@@ -37,7 +37,7 @@ class FakeDriveFiles:
     def __init__(self, service: FakeDriveService) -> None:
         self.service = service
 
-    def list(self, **kwargs: Any) -> FakeRequest:  # noqa: A003
+    def list(self, **kwargs: Any) -> FakeRequest:
         self.service.lists.append(kwargs)
         return FakeRequest({"files": []})
 

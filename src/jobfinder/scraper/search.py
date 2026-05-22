@@ -34,8 +34,8 @@ from jobfinder.scraper.settings import (
 LOGGER = logging.getLogger("jobfinder.scraper")
 
 __all__ = [
-    "ApifyConfigurationError",
     "ApifyAccountUnavailableError",
+    "ApifyConfigurationError",
     "ApifyRunError",
     "ApifyRunTimeoutError",
     "ApifyTransientError",
@@ -233,12 +233,12 @@ def get_searches(
 ) -> tuple[str, list[SearchRequest]]:
     """Build all source/keyword searches for a scraper run."""
     searches = []
+    provider_actor_ids = getattr(
+        settings,
+        "provider_actor_ids",
+        settings.source_actor_ids,
+    )
     for source in sources:
-        provider_actor_ids = getattr(
-            settings,
-            "provider_actor_ids",
-            settings.source_actor_ids,
-        )
         if source not in provider_actor_ids:
             continue
         searches.extend(build_source_searches(settings, source))
@@ -317,15 +317,16 @@ def group_batched_linkedin_jobs(
     jobs: list[dict[str, Any]],
 ) -> list[tuple[int, str, list[dict[str, Any]]]] | None:
     """Group batched LinkedIn results by original keyword when attribution is clear."""
-    url_to_search = {
-        search_url(search): (idx, search)
-        for idx, search in batch.searches
-        if search_url(search)
-    }
+    url_to_search: dict[str, tuple[int, SearchRequest]] = {}
+    for idx, search in batch.searches:
+        url = search_url(search)
+        if url:
+            url_to_search[url] = (idx, search)
+    source_urls = set(url_to_search)
     grouped: dict[int, list[dict[str, Any]]] = {idx: [] for idx, _ in batch.searches}
 
     for job in jobs:
-        matching_urls = candidate_source_urls(job) & url_to_search.keys()
+        matching_urls = candidate_source_urls(job) & source_urls
         if len(matching_urls) != 1:
             return None
         idx, search = url_to_search[matching_urls.pop()]
@@ -606,12 +607,9 @@ def run_all_searches(
                     LOGGER.error("%s", exc)
                     raise
                 else:
+                    search_by_index = dict(batch.searches)
                     for idx, keyword, jobs in batch_results:
-                        search = next(
-                            search
-                            for search_idx, search in batch.searches
-                            if search_idx == idx
-                        )
+                        search = search_by_index[idx]
                         all_results.append((idx, keyword, jobs))
                         if jobs:
                             LOGGER.info(

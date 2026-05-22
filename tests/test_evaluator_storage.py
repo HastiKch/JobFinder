@@ -32,11 +32,11 @@ class FakeValuesResource:
     def __init__(self, service: FakeGoogleService) -> None:
         self.service = service
 
-    def get(self, *, spreadsheetId: str, range: str) -> FakeRequest:  # noqa: A002, N803
+    def get(self, *, spreadsheetId: str, range: str) -> FakeRequest:
         self.service.value_gets.append((spreadsheetId, range))
         return FakeRequest({"values": self.service.values})
 
-    def batchUpdate(  # noqa: N802, N803
+    def batchUpdate(
         self,
         *,
         spreadsheetId: str,
@@ -55,13 +55,13 @@ class FakeSpreadsheetsResource:
     def values(self) -> FakeValuesResource:
         return FakeValuesResource(self.service)
 
-    def get(self, *, spreadsheetId: str, fields: str) -> FakeRequest:  # noqa: N803
+    def get(self, *, spreadsheetId: str, fields: str) -> FakeRequest:
         self.service.metadata_gets.append((spreadsheetId, fields))
         return FakeRequest(
             {"sheets": [{"properties": {"title": "Run", "sheetId": 123}}]}
         )
 
-    def batchUpdate(  # noqa: N802, N803
+    def batchUpdate(
         self,
         *,
         spreadsheetId: str,

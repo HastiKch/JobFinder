@@ -109,8 +109,9 @@ def first_spreadsheet_value(job: dict[str, Any], *keys: str) -> str:
     """Return the first non-empty spreadsheet-safe field from a job dict."""
     for key in keys:
         value = job.get(key)
-        if value is not None and sheet_safe(value) != "N/A":
-            return sheet_safe(value)
+        safe_value = sheet_safe(value)
+        if safe_value != "N/A":
+            return safe_value
     return "N/A"
 
 
@@ -207,7 +208,8 @@ def get_location(job: dict[str, Any]) -> str:
 
 def get_job_url(settings: ScraperSettings, job: dict[str, Any]) -> str:
     """Return the best available public job URL."""
-    if job.get("_source") in {"indeed", "stepstone"}:
+    source = job.get("_source")
+    if source in {"indeed", "stepstone"}:
         url = (
             job.get("url")
             or job.get("link")
@@ -236,9 +238,9 @@ def get_job_url(settings: ScraperSettings, job: dict[str, Any]) -> str:
 
     job_id = job.get("jobId") or job.get("job_id") or job.get("id") or ""
     if job_id:
-        if job.get("_source") == "indeed":
+        if source == "indeed":
             return f"{indeed_base_url(settings)}/viewjob?jk={job_id}"
-        if job.get("_source") == "linkedin":
+        if source == "linkedin":
             return f"https://www.linkedin.com/jobs/view/{job_id}/"
     return "N/A"
 
@@ -255,13 +257,9 @@ def get_posted(settings: ScraperSettings, job: dict[str, Any]) -> str:
             if not fallback:
                 fallback = sheet_safe(value)
 
-    pub_date = job.get("pubDate")
-    posted_at = parse_datetime_value(settings, pub_date)
-    if posted_at:
-        return format_posted_datetime(posted_at)
     if fallback:
         return fallback
-    return format_posted_value(settings, pub_date)
+    return "N/A"
 
 
 def get_posted_datetime(
@@ -274,7 +272,7 @@ def get_posted_datetime(
             posted_at = parse_datetime_value(settings, value)
             if posted_at:
                 return posted_at
-    return parse_datetime_value(settings, job.get("pubDate"))
+    return None
 
 
 def get_job_type(job: dict[str, Any]) -> str:
@@ -474,14 +472,6 @@ def parse_datetime_value(settings: ScraperSettings, value: Any) -> datetime | No
 def format_posted_datetime(posted_at: datetime) -> str:
     """Format a posted datetime for spreadsheet output."""
     return posted_at.strftime("%Y-%m-%d %H:%M:%S")
-
-
-def format_posted_value(settings: ScraperSettings, value: Any) -> str:
-    """Format a raw posted value, parsing it first when possible."""
-    posted_at = parse_datetime_value(settings, value)
-    if posted_at:
-        return format_posted_datetime(posted_at)
-    return sheet_safe(value)
 
 
 def legacy_provider_job_key(job: dict[str, Any]) -> str:

@@ -39,6 +39,9 @@ ONSITE_WORDS = ("onsite", "on-site", "vor ort", "praesenz", "präsenz")
 unique_values = provider_normalization.unique
 unique = unique_values
 """Backward-compatible alias for the provider normalization helper."""
+seconds_from_published_at = provider_normalization.seconds_from_published_at
+parse_salary_number = provider_normalization.parse_salary_number
+format_money = provider_normalization.format_money
 
 
 @dataclass(frozen=True)
@@ -108,11 +111,7 @@ class StepstoneMetadata:
 
     def as_dict(self) -> dict[str, Any]:
         """Return only populated metadata values."""
-        values: dict[str, Any] = {}
-        for key, value in self.__dict__.items():
-            if value:
-                values[key] = list(value) if isinstance(value, tuple) else value
-        return values
+        return provider_normalization.populated_metadata_dict(self)
 
     def description_lines(self) -> list[str]:
         """Return concise metadata lines that help AI evaluation."""
@@ -142,18 +141,6 @@ def posted_within_filter(settings: ScraperSettings) -> str:
         if days <= supported_days:
             return str(supported_days)
     return "all"
-
-
-def seconds_from_published_at(value: str) -> int | None:
-    """Parse LinkedIn-style ``rSECONDS`` windows used by scraper settings."""
-    text = (value or "").strip().casefold()
-    if not text.startswith("r"):
-        return None
-    try:
-        seconds = int(text[1:])
-    except ValueError:
-        return None
-    return seconds if seconds > 0 else None
 
 
 def build_actor_input(settings: ScraperSettings, keyword: str) -> dict[str, Any]:
@@ -252,7 +239,7 @@ def absolute_stepstone_url(value: str) -> str:
     """Return an absolute Stepstone URL from relative actor output."""
     if not value:
         return ""
-    if value.startswith("http://") or value.startswith("https://"):
+    if value.startswith(("http://", "https://")):
         return value
     return urljoin(STEPSTONE_BASE_URL, value)
 
@@ -375,24 +362,6 @@ def format_salary(item: dict[str, Any]) -> str:
     return f"{prefix}{amount}{suffix}"
 
 
-def parse_salary_number(value: Any) -> float | None:
-    """Parse numeric salary values from actor output."""
-    if value in (None, "") or isinstance(value, bool):
-        return None
-    try:
-        number = float(str(value).replace(",", "").strip())
-    except ValueError:
-        return None
-    return number if number >= 0 else None
-
-
-def format_money(value: float) -> str:
-    """Format a salary number without unnecessary decimals."""
-    if value.is_integer():
-        return f"{int(value):,}"
-    return f"{value:,.2f}".rstrip("0").rstrip(".")
-
-
 def classify_work_mode(item: dict[str, Any]) -> str:
     """Classify Stepstone work-from-home hints conservatively."""
     values = [
@@ -428,10 +397,8 @@ def description_with_metadata(
         "summary",
     )
     metadata_lines = metadata.description_lines()
-    if not metadata_lines:
-        return description
-
-    metadata_block = "\n".join(f"- {line}" for line in metadata_lines)
-    if description:
-        return f"{description}\n\nStepstone structured metadata:\n{metadata_block}"
-    return f"Stepstone structured metadata:\n{metadata_block}"
+    return provider_normalization.append_metadata_block(
+        description,
+        "Stepstone",
+        metadata_lines,
+    )

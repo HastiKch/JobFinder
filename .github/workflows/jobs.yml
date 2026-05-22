@@ -12,7 +12,6 @@ on:
           - linkedin
           - indeed
           - stepstone
-          - both
           - all
       posted_time_window:
         description: "Provider posted-time window"

@@ -91,7 +91,6 @@ Supported values:
 | `linkedin` | LinkedIn only |
 | `indeed` | Indeed only |
 | `stepstone` | Stepstone only |
-| `both` | LinkedIn and Indeed |
 | `all` | LinkedIn, Indeed, and Stepstone |
 | `linkedin,stepstone` | Explicit comma-separated source list |
 
@@ -492,7 +491,7 @@ Environment variables override values from `.env`.
 | `OPENAI_API_KEY` | blank | Required for evaluator and full pipeline runs. |
 | `GOOGLE_SPREADSHEET_ID` | blank | Google Sheet ID. Also read from `google_spreadsheet_id.txt` when absent. |
 | `JOBFINDER_SCRAPER_OUTPUT_MODE` | `excel` | `excel`, `google_sheets`, or `both`. Full pipeline forces `google_sheets`. |
-| `JOBFINDER_SCRAPER_SOURCES` | `linkedin` | `linkedin`, `indeed`, `stepstone`, `both`, `all`, or comma-separated source names. |
+| `JOBFINDER_SCRAPER_SOURCES` | `linkedin` | `linkedin`, `indeed`, `stepstone`, `all`, or comma-separated source names. |
 | `JOBFINDER_PIPELINE_MODE` | `scrape_and_evaluate` | Used by the pipeline when `--mode` is omitted. |
 | `JOBFINDER_SCRAPER_TIMEZONE` | `Europe/Berlin` | Timezone for logs and timestamped worksheet names. |
 | `JOBFINDER_SCRAPER_POSTED_TIMEZONE` | `Europe/Berlin` | Timezone used for the `Posted` spreadsheet column and exact posted-window filtering. |
@@ -654,7 +653,7 @@ The repository has two workflow files:
 
 The production workflow supports manual inputs:
 
-- `sources`: `linkedin`, `indeed`, `stepstone`, `both`, or `all`.
+- `sources`: `linkedin`, `indeed`, `stepstone`, or `all`.
 - `posted_time_window`: `since_previous_run`, `last_24h`, `last_7d`, or
   `backfill`.
 - `max_applicants`: `50`, `100`, `200`, or `no_limit`.

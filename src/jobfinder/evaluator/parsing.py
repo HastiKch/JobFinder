@@ -58,6 +58,11 @@ def normalize_header(value: Any) -> str:
     return re.sub(r"[^a-z0-9]+", " ", text.casefold()).strip()
 
 
+NORMALIZED_AI_OUTPUT_COLUMNS = frozenset(
+    normalize_header(column) for column in AI_OUTPUT_COLUMNS
+)
+
+
 def trim_trailing_blank_headers(headers: list[Any]) -> list[str]:
     """Drop blank header cells after the last meaningful header."""
     last_idx = 0
@@ -119,9 +124,7 @@ def include_job_column(header: str) -> bool:
         return False
     if normalized in UNHELPFUL_COLUMNS:
         return False
-    if normalized in {normalize_header(column) for column in AI_OUTPUT_COLUMNS}:
-        return False
-    return True
+    return normalized not in NORMALIZED_AI_OUTPUT_COLUMNS
 
 
 def row_to_job_advertisement(headers: list[str], row: list[Any]) -> str:
@@ -198,10 +201,10 @@ def extract_job_records(
             not reevaluate_existing
             and existing_verdict
             and normalized_verdict != "error"
+            and not suitable_missing_cv
         ):
-            if not suitable_missing_cv:
-                skipped_existing += 1
-                continue
+            skipped_existing += 1
+            continue
 
         advertisement = row_to_job_advertisement(headers, row)
         if len(advertisement) < 20:

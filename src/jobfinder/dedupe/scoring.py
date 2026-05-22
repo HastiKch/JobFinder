@@ -91,12 +91,15 @@ def location_similarity(left: NormalizedJob, right: NormalizedJob) -> float:
         return 0.75
     if left.normalized_location == right.normalized_location:
         return 1.0
-    if left.location_tokens and right.location_tokens:
-        if (
+    if (
+        left.location_tokens
+        and right.location_tokens
+        and (
             left.location_tokens <= right.location_tokens
             or right.location_tokens <= left.location_tokens
-        ):
-            return 0.92
+        )
+    ):
+        return 0.92
     if left.remote_mode and right.remote_mode and left.remote_mode == right.remote_mode:
         return 0.82
     return blended_text_similarity(

@@ -7,6 +7,7 @@ import logging
 import os
 import subprocess
 import sys
+from importlib.util import find_spec
 
 from jobfinder.core.logging import configure_cli_logging
 from jobfinder.env import EnvSettings, load_local_env
@@ -89,9 +90,7 @@ def validate_python_dependencies(pipeline_mode: str) -> None:
         return
 
     missing_packages = []
-    try:
-        import openai  # noqa: F401
-    except ImportError:
+    if find_spec("openai") is None:
         missing_packages.append("openai")
 
     if missing_packages:

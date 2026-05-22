@@ -16,8 +16,8 @@ def load_local_env(path: Path = ENV_FILE) -> dict[str, str]:
     if not path.exists():
         return values
 
-    for line in path.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
         if not line or line.startswith("#"):
             continue
         if line.startswith("export "):
@@ -63,8 +63,7 @@ class EnvSettings:
         try:
             return int(value)
         except ValueError:
-            message = f"Invalid integer for {name}={value!r}; using {default}."
-            (self.logger or logging.getLogger(__name__)).warning(message)
+            self._warn_invalid("integer", name, value, default)
             return default
 
     def get_int_alias(self, name: str, *legacy_names: str, default: int) -> int:
@@ -73,8 +72,7 @@ class EnvSettings:
         try:
             return int(value)
         except ValueError:
-            message = f"Invalid integer for {name}={value!r}; using {default}."
-            (self.logger or logging.getLogger(__name__)).warning(message)
+            self._warn_invalid("integer", name, value, default)
             return default
 
     def get_float(self, name: str, default: float) -> float:
@@ -83,8 +81,7 @@ class EnvSettings:
         try:
             return float(value)
         except ValueError:
-            message = f"Invalid float for {name}={value!r}; using {default}."
-            (self.logger or logging.getLogger(__name__)).warning(message)
+            self._warn_invalid("float", name, value, default)
             return default
 
     def get_float_alias(
@@ -98,8 +95,7 @@ class EnvSettings:
         try:
             return float(value)
         except ValueError:
-            message = f"Invalid float for {name}={value!r}; using {default}."
-            (self.logger or logging.getLogger(__name__)).warning(message)
+            self._warn_invalid("float", name, value, default)
             return default
 
     def get_bool(self, name: str, default: bool) -> bool:
@@ -110,8 +106,7 @@ class EnvSettings:
         if value in {"0", "false", "no", "n", "off"}:
             return False
 
-        message = f"Invalid boolean for {name}={value!r}; using {default}."
-        (self.logger or logging.getLogger(__name__)).warning(message)
+        self._warn_invalid("boolean", name, value, default)
         return default
 
     def get_bool_alias(self, name: str, *legacy_names: str, default: bool) -> bool:
@@ -126,6 +121,16 @@ class EnvSettings:
         if value in {"0", "false", "no", "n", "off"}:
             return False
 
-        message = f"Invalid boolean for {name}={value!r}; using {default}."
-        (self.logger or logging.getLogger(__name__)).warning(message)
+        self._warn_invalid("boolean", name, value, default)
         return default
+
+    def _warn_invalid(
+        self,
+        kind: str,
+        name: str,
+        value: str,
+        default: int | float | bool,
+    ) -> None:
+        """Log a consistent fallback warning for malformed settings."""
+        message = f"Invalid {kind} for {name}={value!r}; using {default}."
+        (self.logger or logging.getLogger(__name__)).warning(message)

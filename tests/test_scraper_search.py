@@ -23,7 +23,7 @@ from jobfinder.scraper.search import (
     run_actor,
     run_all_searches,
 )
-from jobfinder.scraper.settings import ApifyTokenPool
+from jobfinder.scraper.settings import SOURCE_ALIASES, ApifyTokenPool
 
 
 class FakeResponse:
@@ -502,6 +502,11 @@ def test_parse_job_sources_supports_stepstone_and_comma_lists():
 
     settings.source_mode = "all"
     assert parse_job_sources(settings) == ["linkedin", "indeed", "stepstone"]
+
+
+def test_parse_job_sources_does_not_support_both_shortcut():
+    """Source selection should not expose the old LinkedIn-plus-Indeed shortcut."""
+    assert "both" not in SOURCE_ALIASES
 
 
 def test_get_searches_uses_one_stepstone_run_for_direct_urls():
