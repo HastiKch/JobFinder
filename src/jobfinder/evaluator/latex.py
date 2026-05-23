@@ -10,6 +10,12 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+# XeTeX writes "Output written on cv.pdf (N pages, ...)." to stdout.
+_PAGE_COUNT_RE = re.compile(
+    r"Output written on [^\(]*\(\s*(\d+)\s+pages?\b",
+    re.IGNORECASE,
+)
+
 
 @dataclass(frozen=True)
 class LatexCompilationResult:
@@ -20,6 +26,15 @@ class LatexCompilationResult:
     error: str = ""
     stdout: str = ""
     stderr: str = ""
+    page_count: int | None = None
+
+
+def parse_page_count_from_output(text: str) -> int | None:
+    """Extract the compiled PDF page count from XeTeX/latexmk stdout."""
+    match = _PAGE_COUNT_RE.search(text)
+    if match:
+        return int(match.group(1))
+    return None
 
 
 SubprocessRunner = Callable[..., subprocess.CompletedProcess[str]]
@@ -161,9 +176,13 @@ def compile_latex_to_pdf(
             )
 
         shutil.copy2(compiled_pdf, output_pdf)
+        page_count = parse_page_count_from_output(stdout) or parse_page_count_from_output(
+            stderr
+        )
         return LatexCompilationResult(
             success=True,
             pdf_path=output_pdf,
             stdout=stdout,
             stderr=stderr,
+            page_count=page_count,
         )

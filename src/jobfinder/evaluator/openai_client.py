@@ -28,6 +28,10 @@ from jobfinder.evaluator.parsing import (
 
 LOGGER = logging.getLogger("job_fit_evaluator")
 
+# Callable type for the injectable CV-shortening function used by pdf_output.
+# Receives (current_latex_code, current_page_count) and returns shortened LaTeX.
+ShortenLatexFunc = Callable[[str, int], str]
+
 STRICT_OUTPUT_INSTRUCTIONS = """
 Preserve the provided MASTER PROMPT logic and evidence rules exactly.
 For this automation pipeline, the first three output lines must be machine-readable:
@@ -54,6 +58,32 @@ lines, include any additional reason text and, if required by the MASTER PROMPT,
 the tailored LaTeX CV. If Verdict is Suitable, the tailored LaTeX CV is required
 and must not be blank, N/A, omitted, or replaced with a placeholder.
 """.strip()
+
+
+_CV_SHORTEN_INSTRUCTIONS = (
+    "You are a LaTeX CV editor. Return ONLY the complete updated LaTeX code "
+    "inside a ```latex ... ``` code block. No explanation, no commentary."
+)
+
+
+def build_cv_shorten_prompt(latex_code: str, page_count: int, max_pages: int) -> str:
+    """Build a prompt that asks the model to shorten a LaTeX CV to max_pages."""
+    return (
+        f"The following LaTeX CV compiles to {page_count} page(s) but must fit "
+        f"in at most {max_pages} page(s).\n\n"
+        "Shorten it by:\n"
+        "- Condensing bullet points to 1-2 lines each\n"
+        "- Removing minor or redundant items\n"
+        "- Using shorter phrasing throughout\n\n"
+        "Do NOT:\n"
+        "- Remove the Ausbildung (Education) section\n"
+        "- Remove section headers or contact information\n"
+        "- Change the document class, packages, or overall structure\n\n"
+        "Return ONLY the complete LaTeX code in a code block.\n\n"
+        "```latex\n"
+        f"{latex_code.strip()}\n"
+        "```"
+    )
 
 
 class RequestPacer:
@@ -257,6 +287,80 @@ class OpenAIJobEvaluator:
 
         raise EvaluationError(
             f"OpenAI API failed after {attempts} attempt(s): {last_error}"
+        )
+
+    def shorten_latex(
+        self,
+        latex_code: str,
+        page_count: int,
+        max_pages: int = 2,
+    ) -> str:
+        """Ask the model to shorten a LaTeX CV so it fits within max_pages.
+
+        Returns the shortened LaTeX code. Raises EvaluationError when the
+        response does not contain usable LaTeX or the API call fails.
+        """
+        prompt = build_cv_shorten_prompt(latex_code, page_count, max_pages)
+        response_text = self._call_text(
+            prompt,
+            label=f"CV shortening ({page_count}→{max_pages} pages)",
+        )
+        shortened = extract_latex_cv_from_response(response_text)
+        if looks_like_latex_cv(shortened):
+            return shortened
+        if looks_like_latex_cv(response_text.strip()):
+            return response_text.strip()
+        raise EvaluationError(
+            f"CV shortening response did not contain usable LaTeX "
+            f"(CV was {page_count} pages)."
+        )
+
+    def _call_text(self, prompt: str, label: str) -> str:
+        """Call OpenAI with retries for non-record tasks and return response text."""
+        attempts = self.retries + 1
+        last_error: Exception | None = None
+
+        for attempt in range(1, attempts + 1):
+            try:
+                response = self.client.responses.create(
+                    model=self.model,
+                    instructions=_CV_SHORTEN_INSTRUCTIONS,
+                    input=prompt,
+                    max_output_tokens=self.max_output_tokens,
+                )
+                response_text = get_response_text(response)
+                if not response_text:
+                    raise EvaluationError("OpenAI returned an empty response.")
+                return response_text
+            except Exception as exc:
+                last_error = exc
+                if is_openai_quota_error(exc):
+                    raise OpenAIQuotaError(
+                        "OpenAI reported insufficient_quota. Add billing/credits "
+                        "to the OpenAI API project, then run the evaluator again."
+                    ) from exc
+
+                retryable = is_retryable_openai_error(exc)
+                if attempt >= attempts or not retryable:
+                    break
+
+                delay = retry_after_seconds(exc)
+                if delay is None:
+                    delay = min(self.max_delay, self.base_delay * (2 ** (attempt - 1)))
+                    delay += random.uniform(0, 0.75)
+
+                LOGGER.warning(
+                    "%s, attempt %s/%s: %s. Retrying in %.1fs.",
+                    label,
+                    attempt,
+                    attempts,
+                    exc,
+                    delay,
+                )
+                time.sleep(delay)
+
+        raise EvaluationError(
+            f"OpenAI API failed after {attempts} attempt(s) for {label}: {last_error}"
         )
 
 

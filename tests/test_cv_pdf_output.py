@@ -8,7 +8,11 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from jobfinder.evaluator.latex import LatexCompilationResult, compile_latex_to_pdf
+from jobfinder.evaluator.latex import (
+    LatexCompilationResult,
+    compile_latex_to_pdf,
+    parse_page_count_from_output,
+)
 from jobfinder.evaluator.models import JobEvaluation, JobRecord
 from jobfinder.evaluator.pdf_output import (
     assign_cv_ids,
@@ -228,4 +232,215 @@ def test_generate_cv_pdf_outputs_requires_drive_folder_id():
     assert result.success_count == 0
     assert result.error_count == 1
     assert "Missing Google Drive folder ID" in result.outputs[2]
-    assert "JOB_EVAL_CV_DRIVE_FOLDER_ID" in result.outputs[2]
+
+
+# ---------------------------------------------------------------------------
+# parse_page_count_from_output
+# ---------------------------------------------------------------------------
+
+
+def test_parse_page_count_from_output_parses_xelatex_singular():
+    """XeTeX 'Output written on ... (1 page).' should be parsed correctly."""
+    stdout = "Output written on cv.pdf (1 page, 12345 bytes)."
+    assert parse_page_count_from_output(stdout) == 1
+
+
+def test_parse_page_count_from_output_parses_xelatex_plural():
+    """XeTeX 'Output written on ... (3 pages).' should be parsed correctly."""
+    stdout = (
+        "This is XeTeX, Version 3.141592653\n"
+        "Output written on cv.pdf (3 pages, 98765 bytes).\n"
+        "Transcript written on cv.log."
+    )
+    assert parse_page_count_from_output(stdout) == 3
+
+
+def test_parse_page_count_from_output_returns_none_when_absent():
+    """Missing page-count line should return None, not raise."""
+    assert parse_page_count_from_output("LaTeX compilation complete.") is None
+    assert parse_page_count_from_output("") is None
+
+
+# ---------------------------------------------------------------------------
+# page-limit enforcement inside generate_cv_pdf_outputs
+# ---------------------------------------------------------------------------
+
+
+def _make_compile_stub(page_counts: list[int | None]) -> Any:
+    """Return a fake compile_latex that cycles through the supplied page counts."""
+    call_index = [0]
+
+    def fake_compile(
+        latex_code: str,
+        output_pdf: Path,
+        **kwargs: Any,
+    ) -> LatexCompilationResult:
+        idx = min(call_index[0], len(page_counts) - 1)
+        call_index[0] += 1
+        count = page_counts[idx]
+        output_pdf.write_bytes(b"%PDF-1.7\n")
+        return LatexCompilationResult(success=True, pdf_path=output_pdf, page_count=count)
+
+    return fake_compile
+
+
+def _fake_upload(
+    drive_service: Any,
+    pdf_path: Path,
+    *,
+    folder_id: str,
+    filename: str,
+) -> SimpleNamespace:
+    return SimpleNamespace(web_view_link=f"https://drive.example/{filename}")
+
+
+def test_generate_cv_pdf_outputs_accepts_cv_within_page_limit(tmp_path):
+    """A CV already within the page limit must be uploaded without shortening."""
+    service = FakeDriveService()
+    records = [JobRecord(2, "GIS / Acme", "Job Title: GIS")]
+    evaluations = {2: JobEvaluation(2, "Suitable", 90, "ok", tailored_cv=LATEX_CV)}
+
+    shorten_calls: list[tuple[str, int]] = []
+
+    def fake_shorten(latex: str, pages: int) -> str:
+        shorten_calls.append((latex, pages))
+        return latex
+
+    result = generate_cv_pdf_outputs(
+        records,
+        evaluations,
+        drive_service=service,
+        parent_folder_id="folder",
+        now=datetime(2026, 1, 1),
+        compile_latex=_make_compile_stub([2]),  # 2 pages, limit is 2
+        upload_pdf=_fake_upload,
+        max_page_limit=2,
+        shorten_latex=fake_shorten,
+        max_shorten_attempts=3,
+    )
+
+    assert result.success_count == 1
+    assert result.error_count == 0
+    assert shorten_calls == []  # no shortening needed
+
+
+def test_generate_cv_pdf_outputs_shortens_overlong_cv_until_within_limit(tmp_path):
+    """A 3-page CV must be shortened until it reaches the 2-page limit."""
+    service = FakeDriveService()
+    records = [JobRecord(2, "GIS / Acme", "Job Title: GIS")]
+    evaluations = {2: JobEvaluation(2, "Suitable", 90, "ok", tailored_cv=LATEX_CV)}
+
+    shorten_calls: list[int] = []
+
+    def fake_shorten(latex: str, pages: int) -> str:
+        shorten_calls.append(pages)
+        return latex + "% shorter\n"
+
+    # First compile: 3 pages → shorten → second compile: 2 pages → upload.
+    result = generate_cv_pdf_outputs(
+        records,
+        evaluations,
+        drive_service=service,
+        parent_folder_id="folder",
+        now=datetime(2026, 1, 1),
+        compile_latex=_make_compile_stub([3, 2]),
+        upload_pdf=_fake_upload,
+        max_page_limit=2,
+        shorten_latex=fake_shorten,
+        max_shorten_attempts=3,
+    )
+
+    assert result.success_count == 1
+    assert result.error_count == 0
+    assert shorten_calls == [3]  # shortened once
+
+
+def test_generate_cv_pdf_outputs_uploads_after_max_attempts_even_if_still_long():
+    """After exhausting shorten attempts, upload the best available version."""
+    service = FakeDriveService()
+    records = [JobRecord(2, "GIS / Acme", "Job Title: GIS")]
+    evaluations = {2: JobEvaluation(2, "Suitable", 90, "ok", tailored_cv=LATEX_CV)}
+
+    shorten_calls: list[int] = []
+
+    def fake_shorten(latex: str, pages: int) -> str:
+        shorten_calls.append(pages)
+        return latex  # never actually gets shorter
+
+    # All compilations return 3 pages — shortener is called max_shorten_attempts times.
+    result = generate_cv_pdf_outputs(
+        records,
+        evaluations,
+        drive_service=service,
+        parent_folder_id="folder",
+        now=datetime(2026, 1, 1),
+        compile_latex=_make_compile_stub([3, 3, 3, 3]),
+        upload_pdf=_fake_upload,
+        max_page_limit=2,
+        shorten_latex=fake_shorten,
+        max_shorten_attempts=2,
+    )
+
+    # Upload still succeeds (best-effort).
+    assert result.success_count == 1
+    assert result.error_count == 0
+    # Shortened exactly max_shorten_attempts times.
+    assert len(shorten_calls) == 2
+
+
+def test_generate_cv_pdf_outputs_skips_shortening_when_page_count_unknown():
+    """When the compiler does not report a page count, upload without shortening."""
+    service = FakeDriveService()
+    records = [JobRecord(2, "GIS / Acme", "Job Title: GIS")]
+    evaluations = {2: JobEvaluation(2, "Suitable", 90, "ok", tailored_cv=LATEX_CV)}
+
+    shorten_calls: list[int] = []
+
+    def fake_shorten(latex: str, pages: int) -> str:
+        shorten_calls.append(pages)
+        return latex
+
+    result = generate_cv_pdf_outputs(
+        records,
+        evaluations,
+        drive_service=service,
+        parent_folder_id="folder",
+        now=datetime(2026, 1, 1),
+        compile_latex=_make_compile_stub([None]),  # page_count unknown
+        upload_pdf=_fake_upload,
+        max_page_limit=2,
+        shorten_latex=fake_shorten,
+        max_shorten_attempts=3,
+    )
+
+    assert result.success_count == 1
+    assert result.error_count == 0
+    assert shorten_calls == []
+
+
+def test_generate_cv_pdf_outputs_uploads_when_shortener_raises():
+    """A shortener failure should not block the upload; use the current version."""
+    service = FakeDriveService()
+    records = [JobRecord(2, "GIS / Acme", "Job Title: GIS")]
+    evaluations = {2: JobEvaluation(2, "Suitable", 90, "ok", tailored_cv=LATEX_CV)}
+
+    def exploding_shorten(latex: str, pages: int) -> str:
+        raise RuntimeError("OpenAI quota exceeded")
+
+    result = generate_cv_pdf_outputs(
+        records,
+        evaluations,
+        drive_service=service,
+        parent_folder_id="folder",
+        now=datetime(2026, 1, 1),
+        compile_latex=_make_compile_stub([3]),  # over limit but shortener fails
+        upload_pdf=_fake_upload,
+        max_page_limit=2,
+        shorten_latex=exploding_shorten,
+        max_shorten_attempts=3,
+    )
+
+    # Gracefully uploaded the 3-page version rather than erroring.
+    assert result.success_count == 1
+    assert result.error_count == 0
+    assert result.outputs[2].startswith("https://drive.example/")

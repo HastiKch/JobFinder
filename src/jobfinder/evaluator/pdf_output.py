@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import re
 import tempfile
 import unicodedata
@@ -22,8 +23,12 @@ from jobfinder.integrations.google.drive import (
     upload_pdf_to_drive,
 )
 
+LOGGER = logging.getLogger("job_fit_evaluator")
+
 DEFAULT_DRIVE_PARENT_FOLDER_ID = ""
 DEFAULT_CV_PDF_APPLICANT_NAME = "Applicant"
+DEFAULT_CV_MAX_PAGES = 2
+DEFAULT_CV_MAX_SHORTEN_ATTEMPTS = 2
 ERROR_CELL_LIMIT = 4000
 INVALID_FILENAME_CHARS_RE = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
 SAFE_FILENAME_TOKEN_RE = re.compile(r"[^A-Za-z0-9]+")
@@ -70,6 +75,8 @@ class CvPdfRunResult:
 
 CompileLatexFunc = Callable[..., LatexCompilationResult]
 UploadPdfFunc = Callable[..., Any]
+# (current_latex, current_page_count) -> shortened_latex — raises on failure
+ShortenLatexFunc = Callable[[str, int], str]
 
 
 def build_evaluator_google_drive_service() -> Any:
@@ -221,8 +228,16 @@ def generate_cv_pdf_outputs(
     timeout_seconds: int = 120,
     compile_latex: CompileLatexFunc = compile_latex_to_pdf,
     upload_pdf: UploadPdfFunc = upload_pdf_to_drive,
+    max_page_limit: int = DEFAULT_CV_MAX_PAGES,
+    shorten_latex: ShortenLatexFunc | None = None,
+    max_shorten_attempts: int = DEFAULT_CV_MAX_SHORTEN_ATTEMPTS,
 ) -> CvPdfRunResult:
-    """Compile generated CVs, upload PDFs to Drive, and return sheet values."""
+    """Compile generated CVs, upload PDFs to Drive, and return sheet values.
+
+    When ``shorten_latex`` is provided and a compiled CV exceeds
+    ``max_page_limit`` pages, the LaTeX is sent to ``shorten_latex`` and
+    recompiled.  This repeats up to ``max_shorten_attempts`` times.
+    """
     candidates = assign_cv_ids(
         records,
         evaluations,
@@ -253,12 +268,17 @@ def generate_cv_pdf_outputs(
         output_dir = Path(temp_name)
         for candidate in candidates:
             pdf_path = output_dir / candidate.filename
-            compile_result = compile_latex(
-                candidate.latex,
-                pdf_path,
+            compile_result = _compile_with_page_limit(
+                candidate,
+                pdf_path=pdf_path,
                 photo_path=photo_path,
                 timeout_seconds=timeout_seconds,
+                compile_latex=compile_latex,
+                max_page_limit=max_page_limit,
+                shorten_latex=shorten_latex,
+                max_shorten_attempts=max_shorten_attempts,
             )
+
             if not compile_result.success or compile_result.pdf_path is None:
                 outputs[candidate.row_number] = error_cell(
                     "LaTeX compilation failed",
@@ -292,3 +312,92 @@ def generate_cv_pdf_outputs(
         run_folder_name=run_folder.name,
         run_folder_link=run_folder.web_view_link,
     )
+
+
+def _compile_with_page_limit(
+    candidate: CvPdfCandidate,
+    *,
+    pdf_path: Path,
+    photo_path: Path | None,
+    timeout_seconds: int,
+    compile_latex: CompileLatexFunc,
+    max_page_limit: int,
+    shorten_latex: ShortenLatexFunc | None,
+    max_shorten_attempts: int,
+) -> LatexCompilationResult:
+    """Compile a CV PDF, shortening the LaTeX if it exceeds max_page_limit pages.
+
+    On each iteration:
+    1. Compile the current LaTeX.
+    2. If compilation failed, return the failure result immediately.
+    3. If the page count is within the limit (or unknown), return success.
+    4. Otherwise call ``shorten_latex`` and loop — up to ``max_shorten_attempts``
+       times.  After exhausting attempts, return the last successful compilation
+       even if it still exceeds the page limit.
+    """
+    current_latex = candidate.latex
+    last_result: LatexCompilationResult | None = None
+
+    for attempt in range(max_shorten_attempts + 1):
+        result = compile_latex(
+            current_latex,
+            pdf_path,
+            photo_path=photo_path,
+            timeout_seconds=timeout_seconds,
+        )
+        last_result = result
+
+        if not result.success or result.pdf_path is None:
+            return result
+
+        page_count = result.page_count
+
+        # Accept when: page count unknown, within limit, or no shortener wired up.
+        if page_count is None or page_count <= max_page_limit or shorten_latex is None:
+            if page_count is not None and page_count > max_page_limit:
+                LOGGER.warning(
+                    "Row %s (%s): CV is %s page(s) but no shortener is configured "
+                    "(max_page_limit=%s). Uploading as-is.",
+                    candidate.row_number,
+                    candidate.display_name,
+                    page_count,
+                    max_page_limit,
+                )
+            return result
+
+        # Page count exceeds limit and shortener is available.
+        if attempt >= max_shorten_attempts:
+            LOGGER.warning(
+                "Row %s (%s): CV is still %s page(s) after %s shortening "
+                "attempt(s) (limit %s). Uploading current version.",
+                candidate.row_number,
+                candidate.display_name,
+                page_count,
+                max_shorten_attempts,
+                max_page_limit,
+            )
+            return result
+
+        LOGGER.info(
+            "Row %s (%s): CV compiled to %s page(s) (limit %s). "
+            "Requesting AI shortening (attempt %s/%s) ...",
+            candidate.row_number,
+            candidate.display_name,
+            page_count,
+            max_page_limit,
+            attempt + 1,
+            max_shorten_attempts,
+        )
+        try:
+            current_latex = shorten_latex(current_latex, page_count)
+        except Exception as exc:
+            LOGGER.warning(
+                "Row %s (%s): CV shortening failed: %s. Uploading current version.",
+                candidate.row_number,
+                candidate.display_name,
+                exc,
+            )
+            return result
+
+    # Unreachable but satisfies the type checker.
+    return last_result  # type: ignore[return-value]
