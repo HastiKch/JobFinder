@@ -475,9 +475,7 @@ def run_evaluation(options: EvaluationOptions) -> EvaluationSummary:
         photo_path = resolve_cv_photo_file(options.cv_photo_file)
 
         def _shorten_cv(latex_code: str, page_count: int) -> str:
-            return evaluator.shorten_latex(
-                latex_code, page_count, options.cv_max_pages
-            )
+            return evaluator.shorten_latex(latex_code, page_count, options.cv_max_pages)
 
         pdf_result = generate_cv_pdf_outputs(
             records,
