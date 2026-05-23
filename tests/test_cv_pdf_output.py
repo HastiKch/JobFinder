@@ -12,6 +12,7 @@ from jobfinder.evaluator.latex import (
     LatexCompilationResult,
     compile_latex_to_pdf,
     parse_page_count_from_output,
+    prepare_latex_for_xelatex,
 )
 from jobfinder.evaluator.models import JobEvaluation, JobRecord
 from jobfinder.evaluator.pdf_output import (
@@ -160,6 +161,76 @@ def test_compile_latex_to_pdf_rejects_unsafe_input_commands(tmp_path):
     assert result.success is False
     assert "unsupported command" in result.error
     assert not output_pdf.exists()
+
+
+def test_prepare_latex_for_xelatex_replaces_pdflatex_encoding_packages():
+    """XeLaTeX should use OpenType fonts so German sharp s renders correctly."""
+    latex = (
+        "\\documentclass{article}\n"
+        "\\usepackage[utf8]{inputenc}\n"
+        "\\usepackage[T1]{fontenc}\n"
+        "\\usepackage{geometry}\n"
+        "\\begin{document}Straßenplanung, fließend\\end{document}"
+    )
+
+    prepared = prepare_latex_for_xelatex(latex)
+
+    assert "\\usepackage[utf8]{inputenc}" not in prepared
+    assert "\\usepackage[T1]{fontenc}" not in prepared
+    assert "\\usepackage{fontspec}" in prepared
+    assert "lmroman10-regular.otf" in prepared
+    assert prepared.index("\\usepackage{fontspec}") < prepared.index(
+        "\\usepackage{geometry}"
+    )
+
+
+def test_prepare_latex_for_xelatex_preserves_existing_fontspec():
+    """A CV with an explicit fontspec setup should keep the user's font choice."""
+    latex = (
+        "\\documentclass{article}\n"
+        "\\usepackage{fontspec}\n"
+        "\\setmainfont{Helvetica Neue}\n"
+        "\\begin{document}Straßenplanung\\end{document}"
+    )
+
+    prepared = prepare_latex_for_xelatex(latex)
+
+    assert prepared == latex
+    assert "lmroman10-regular.otf" not in prepared
+
+
+def test_compile_latex_to_pdf_runs_normalized_xelatex_source(tmp_path):
+    """Compilation should write the XeLaTeX-normalized source into the temp dir."""
+    output_pdf = tmp_path / "cv.pdf"
+    captured: dict[str, str] = {}
+
+    def fake_runner(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
+        cwd = Path(kwargs["cwd"])
+        captured["tex"] = (cwd / "cv.tex").read_text(encoding="utf-8")
+        (cwd / "cv.pdf").write_bytes(b"%PDF-1.7\n")
+        return subprocess.CompletedProcess(
+            args=args[0],
+            returncode=0,
+            stdout="Output written on cv.pdf (1 page, 12345 bytes).",
+            stderr="",
+        )
+
+    result = compile_latex_to_pdf(
+        (
+            "\\documentclass{article}\n"
+            "\\usepackage[utf8]{inputenc}\n"
+            "\\usepackage[T1]{fontenc}\n"
+            "\\begin{document}Straßenplanung\\end{document}"
+        ),
+        output_pdf,
+        runner=fake_runner,
+    )
+
+    assert result.success is True
+    assert "\\usepackage{fontspec}" in captured["tex"]
+    assert "\\usepackage[T1]{fontenc}" not in captured["tex"]
+    assert result.page_count == 1
+    assert output_pdf.exists()
 
 
 def test_drive_run_folder_name_uses_required_format():

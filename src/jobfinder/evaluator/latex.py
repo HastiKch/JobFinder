@@ -15,6 +15,23 @@ _PAGE_COUNT_RE = re.compile(
     r"Output written on [^\(]*\(\s*(\d+)\s+pages?\b",
     re.IGNORECASE,
 )
+PDFLATEX_ENCODING_PACKAGE_RE = re.compile(
+    r"(?m)^[ \t]*\\usepackage(?:\[[^\]]*\])?\{(?:inputenc|fontenc)\}"
+    r"[ \t]*(?:%.*)?\n?"
+)
+FONT_SPEC_PACKAGE_RE = re.compile(
+    r"(?m)^[ \t]*(?:\\usepackage(?:\[[^\]]*\])?\{fontspec\}|\\setmainfont\b)"
+)
+DOCUMENTCLASS_RE = re.compile(
+    r"(?m)^[ \t]*\\documentclass(?:\[[^\]]*\])?\{[^}]+\}[ \t]*(?:%.*)?\n?"
+)
+XELATEX_UNICODE_FONT_BLOCK = r"""\usepackage{fontspec}
+\defaultfontfeatures{Ligatures=TeX}
+\setmainfont{lmroman10-regular.otf}[
+  BoldFont=lmroman10-bold.otf,
+  ItalicFont=lmroman10-italic.otf,
+  BoldItalicFont=lmroman10-bolditalic.otf
+]"""
 
 
 @dataclass(frozen=True)
@@ -35,6 +52,23 @@ def parse_page_count_from_output(text: str) -> int | None:
     if match:
         return int(match.group(1))
     return None
+
+
+def prepare_latex_for_xelatex(latex_code: str) -> str:
+    """Return LaTeX source with Unicode fonts suitable for XeLaTeX."""
+    stripped = latex_code.strip()
+    if FONT_SPEC_PACKAGE_RE.search(stripped):
+        return stripped
+
+    updated = PDFLATEX_ENCODING_PACKAGE_RE.sub("", stripped)
+    documentclass_match = DOCUMENTCLASS_RE.search(updated)
+    if not documentclass_match:
+        return "\n".join((XELATEX_UNICODE_FONT_BLOCK, updated)).strip()
+
+    insert_at = documentclass_match.end()
+    prefix = updated[:insert_at]
+    suffix = updated[insert_at:].lstrip("\n")
+    return "\n".join((prefix.rstrip(), XELATEX_UNICODE_FONT_BLOCK, suffix)).strip()
 
 
 SubprocessRunner = Callable[..., subprocess.CompletedProcess[str]]
@@ -99,7 +133,10 @@ def compile_latex_to_pdf(
     with tempfile.TemporaryDirectory(prefix="jobfinder_cv_") as temp_name:
         temp_dir = Path(temp_name)
         tex_path = temp_dir / "cv.tex"
-        tex_path.write_text(latex_code.strip() + "\n", encoding="utf-8")
+        tex_path.write_text(
+            prepare_latex_for_xelatex(latex_code) + "\n",
+            encoding="utf-8",
+        )
         copy_photo_to_compilation_dir(photo_path, temp_dir)
 
         command = [
