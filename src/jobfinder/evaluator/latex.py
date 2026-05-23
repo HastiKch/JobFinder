@@ -176,9 +176,9 @@ def compile_latex_to_pdf(
             )
 
         shutil.copy2(compiled_pdf, output_pdf)
-        page_count = parse_page_count_from_output(stdout) or parse_page_count_from_output(
-            stderr
-        )
+        page_count = parse_page_count_from_output(
+            stdout
+        ) or parse_page_count_from_output(stderr)
         return LatexCompilationResult(
             success=True,
             pdf_path=output_pdf,

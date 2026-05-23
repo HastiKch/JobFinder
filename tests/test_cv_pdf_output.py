@@ -279,7 +279,9 @@ def _make_compile_stub(page_counts: list[int | None]) -> Any:
         call_index[0] += 1
         count = page_counts[idx]
         output_pdf.write_bytes(b"%PDF-1.7\n")
-        return LatexCompilationResult(success=True, pdf_path=output_pdf, page_count=count)
+        return LatexCompilationResult(
+            success=True, pdf_path=output_pdf, page_count=count
+        )
 
     return fake_compile
 
