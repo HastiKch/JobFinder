@@ -215,7 +215,7 @@ Choose the source:
 - `linkedin`
 - `indeed`
 - `stepstone`
-- `both`
+- `xing`
 - `all`
 
 Choose the posted-time window:
@@ -272,7 +272,7 @@ max applicants `50`, `scrape_and_evaluate`, and `single_label_only`. The final
 tab keeps `Not Suitable` rows only when they have exactly one unsuitable-reason
 label. Source geography is Germany-only: LinkedIn uses the Germany location and
 geo ID from `configs/filters.json`, Indeed uses `DE` / `Germany`, and Stepstone
-uses `deutschland`.
+and Xing both use `Germany`.
 
 ## 9. Runtime Settings In GitHub Actions
 
@@ -293,9 +293,13 @@ APIFY_TRANSIENT_ERROR_RETRIES: "5"
 APIFY_RETRY_DELAY_SECONDS: "30"
 INDEED_COUNTRY: "DE"
 INDEED_LOCATION: "Germany"
-STEPSTONE_LOCATION: "deutschland"
+STEPSTONE_LOCATION: "Germany"
 STEPSTONE_MAX_CONCURRENCY: "10"
 STEPSTONE_MAX_REQUEST_RETRIES: "3"
+XING_LOCATION: "Germany"
+XING_DISCIPLINE: ""
+XING_MAX_PAGES: "20"
+XING_MAX_CONCURRENCY: "5"
 JOBFINDER_SCRAPER_TIMEZONE: Europe/Berlin
 JOBFINDER_SCRAPER_POSTED_TIMEZONE: Europe/Berlin
 JOB_EVAL_OPENAI_MODEL: "gpt-5-mini"

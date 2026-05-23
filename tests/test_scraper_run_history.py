@@ -73,7 +73,7 @@ def make_settings(run_started_at: datetime) -> ScraperSettings:
         indeed_location="Germany",
         indeed_max_concurrency=5,
         indeed_save_only_unique_items=True,
-        stepstone_location="deutschland",
+        stepstone_location="Germany",
         stepstone_category="",
         stepstone_start_urls=[],
         stepstone_max_results_per_search=500,
@@ -82,8 +82,17 @@ def make_settings(run_started_at: datetime) -> ScraperSettings:
         stepstone_max_request_retries=3,
         stepstone_use_apify_proxy=True,
         stepstone_proxy_groups=["RESIDENTIAL"],
-        source_actor_ids={"linkedin": "actor"},
-        source_max_items={"linkedin": 500},
+        xing_location="Germany",
+        xing_discipline="",
+        xing_remote="",
+        xing_start_url="",
+        xing_max_results_per_search=500,
+        xing_max_pages=20,
+        xing_max_concurrency=5,
+        xing_use_apify_proxy=True,
+        xing_proxy_groups=["RESIDENTIAL"],
+        source_actor_ids={"linkedin": "actor", "xing": "xing-actor"},
+        source_max_items={"linkedin": 500, "xing": 500},
     )
 
 

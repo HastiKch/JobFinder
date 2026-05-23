@@ -64,7 +64,7 @@ def make_settings() -> SimpleNamespace:
         split_country="DE",
         indeed_max_concurrency=5,
         published_at="r86400",
-        stepstone_location="deutschland",
+        stepstone_location="Germany",
         stepstone_category="",
         stepstone_max_concurrency=10,
         stepstone_min_concurrency=1,
@@ -73,12 +73,27 @@ def make_settings() -> SimpleNamespace:
         stepstone_use_apify_proxy=True,
         stepstone_proxy_groups=["RESIDENTIAL"],
         stepstone_start_urls=[],
+        xing_location="Germany",
+        xing_discipline="",
+        xing_remote="",
+        xing_start_url="",
+        xing_max_results_per_search=500,
+        xing_max_pages=20,
+        xing_max_concurrency=5,
+        xing_use_apify_proxy=True,
+        xing_proxy_groups=["RESIDENTIAL"],
         source_actor_ids={
             "linkedin": "linkedin~actor",
             "indeed": "indeed~actor",
             "stepstone": "stepstone~actor",
+            "xing": "xing~actor",
         },
-        source_max_items={"linkedin": 500, "indeed": 500, "stepstone": 500},
+        source_max_items={
+            "linkedin": 500,
+            "indeed": 500,
+            "stepstone": 500,
+            "xing": 500,
+        },
         keywords=["GIS", "Python"],
         source_mode="linkedin",
     )
@@ -493,15 +508,15 @@ def test_run_all_searches_respects_indeed_source_concurrency(monkeypatch):
     assert skipped_searches == []
 
 
-def test_parse_job_sources_supports_stepstone_and_comma_lists():
-    """Users should be able to mix Stepstone with existing providers explicitly."""
+def test_parse_job_sources_supports_stepstone_xing_and_comma_lists():
+    """Users should be able to mix DACH sources with existing providers."""
     settings = make_settings()
-    settings.source_mode = "linkedin,stepstone"
+    settings.source_mode = "linkedin,stepstone,xing"
 
-    assert parse_job_sources(settings) == ["linkedin", "stepstone"]
+    assert parse_job_sources(settings) == ["linkedin", "stepstone", "xing"]
 
     settings.source_mode = "all"
-    assert parse_job_sources(settings) == ["linkedin", "indeed", "stepstone"]
+    assert parse_job_sources(settings) == ["linkedin", "indeed", "stepstone", "xing"]
 
 
 def test_parse_job_sources_does_not_support_both_shortcut():
@@ -522,6 +537,22 @@ def test_get_searches_uses_one_stepstone_run_for_direct_urls():
     assert searches[0].payload["startUrls"] == [
         {"url": "https://www.stepstone.de/jobs/software"}
     ]
+
+
+def test_get_searches_uses_one_xing_run_for_direct_url():
+    """Direct URL mode should not duplicate the same Xing URL per keyword."""
+    settings = make_settings()
+    settings.xing_start_url = "https://www.xing.com/jobs/t-remote?keywords=Remote"
+
+    _, searches = get_searches(settings, ["xing"])
+
+    assert len(searches) == 1
+    assert searches[0].source == "xing"
+    assert searches[0].keyword == "Configured URL"
+    assert searches[0].payload["startUrl"] == (
+        "https://www.xing.com/jobs/t-remote?keywords=Remote"
+    )
+    assert "keyword" not in searches[0].payload
 
 
 def test_run_all_searches_respects_stepstone_source_concurrency(monkeypatch):
@@ -554,6 +585,50 @@ def test_run_all_searches_respects_stepstone_source_concurrency(monkeypatch):
                 keyword=f"Keyword {idx}",
                 display_label=f"Stepstone / Keyword {idx}",
                 actor_id="memo23~stepstone-search-cheerio-ppr",
+                payload={"keyword": f"Keyword {idx}"},
+                max_items=500,
+            )
+            for idx in range(6)
+        ],
+    )
+
+    assert max_active_count <= 2
+    assert [keyword for keyword, _ in results] == [f"Keyword {idx}" for idx in range(6)]
+    assert zero_searches == []
+    assert failed_sources == {}
+    assert skipped_searches == []
+
+
+def test_run_all_searches_respects_xing_source_concurrency(monkeypatch):
+    """Xing actor runs should be bounded separately from global concurrency."""
+    settings = make_settings()
+    settings.search_concurrency = 6
+    settings.xing_max_concurrency = 2
+    active_count = 0
+    max_active_count = 0
+    lock = threading.Lock()
+
+    def fake_run_actor(settings, actor_id, payload, max_items):
+        nonlocal active_count, max_active_count
+        with lock:
+            active_count += 1
+            max_active_count = max(max_active_count, active_count)
+        time.sleep(0.02)
+        with lock:
+            active_count -= 1
+        return [{"title": payload["keyword"], "job_id": payload["keyword"]}]
+
+    monkeypatch.setattr("jobfinder.scraper.search.run_actor", fake_run_actor)
+
+    results, zero_searches, failed_sources, skipped_searches = run_all_searches(
+        settings,
+        [
+            SearchRequest(
+                source="xing",
+                source_label="Xing",
+                keyword=f"Keyword {idx}",
+                display_label=f"Xing / Keyword {idx}",
+                actor_id="shahidirfan~Xing-Jobs-Scraper",
                 payload={"keyword": f"Keyword {idx}"},
                 max_items=500,
             )
@@ -629,3 +704,66 @@ def test_run_all_searches_continues_when_stepstone_source_fails(monkeypatch):
     assert zero_searches == []
     assert "stepstone" in failed_sources
     assert skipped_searches == ["Stepstone / GIS", "Stepstone / Python"]
+
+
+def test_run_all_searches_continues_when_xing_source_fails(monkeypatch):
+    """A Xing failure should not take down already working providers."""
+    settings = make_settings()
+    settings.search_concurrency = 2
+
+    def fake_run_actor(settings, actor_id, payload, max_items):
+        if actor_id == "shahidirfan~Xing-Jobs-Scraper":
+            raise RuntimeError("temporary Xing issue")
+        return [{"title": payload["keyword"], "jobId": payload["keyword"]}]
+
+    monkeypatch.setattr("jobfinder.scraper.search.run_actor", fake_run_actor)
+
+    results, zero_searches, failed_sources, skipped_searches = run_all_searches(
+        settings,
+        [
+            SearchRequest(
+                source="xing",
+                source_label="Xing",
+                keyword="GIS",
+                display_label="Xing / GIS",
+                actor_id="shahidirfan~Xing-Jobs-Scraper",
+                payload={"keyword": "GIS"},
+                max_items=500,
+            ),
+            SearchRequest(
+                source="linkedin",
+                source_label="LinkedIn",
+                keyword="GIS",
+                display_label="LinkedIn / GIS",
+                actor_id="curious_coder~linkedin-jobs-scraper",
+                payload={"keyword": "GIS"},
+                max_items=500,
+            ),
+            SearchRequest(
+                source="xing",
+                source_label="Xing",
+                keyword="Python",
+                display_label="Xing / Python",
+                actor_id="shahidirfan~Xing-Jobs-Scraper",
+                payload={"keyword": "Python"},
+                max_items=500,
+            ),
+        ],
+    )
+
+    assert results == [
+        (
+            "GIS",
+            [
+                {
+                    "title": "GIS",
+                    "jobId": "GIS",
+                    "_source": "linkedin",
+                    "_source_label": "LinkedIn",
+                }
+            ],
+        )
+    ]
+    assert zero_searches == []
+    assert "xing" in failed_sources
+    assert skipped_searches == ["Xing / GIS", "Xing / Python"]

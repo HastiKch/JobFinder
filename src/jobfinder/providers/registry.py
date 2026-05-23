@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from jobfinder.providers import indeed, linkedin, stepstone
+from jobfinder.providers import indeed, linkedin, stepstone, xing
 from jobfinder.scraper.settings import ScraperSettings
 
 ActorRunner = Callable[
@@ -97,6 +97,23 @@ def run_stepstone_actor_search(
     )
 
 
+def run_xing_actor_search(
+    settings: ScraperSettings,
+    actor_id: str,
+    payload: dict[str, Any],
+    max_items: int,
+    actor_runner: ActorRunner,
+) -> list[dict[str, Any]]:
+    """Run Xing and normalize actor-specific output."""
+    return xing.run_actor_search(
+        settings,
+        actor_id,
+        payload,
+        max_items,
+        actor_runner=actor_runner,
+    )
+
+
 PROVIDER_ADAPTERS: dict[str, ProviderAdapter] = {
     "linkedin": ProviderAdapter(
         source="linkedin",
@@ -113,6 +130,12 @@ PROVIDER_ADAPTERS: dict[str, ProviderAdapter] = {
         build_actor_input=stepstone.build_actor_input,
         build_direct_actor_input=stepstone.build_direct_actor_input,
         run_actor_search=run_stepstone_actor_search,
+    ),
+    "xing": ProviderAdapter(
+        source="xing",
+        build_actor_input=xing.build_actor_input,
+        build_direct_actor_input=xing.build_direct_actor_input,
+        run_actor_search=run_xing_actor_search,
     ),
 }
 

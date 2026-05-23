@@ -34,6 +34,8 @@ def test_load_scraper_settings_clamps_provider_payload_limits(monkeypatch):
     monkeypatch.delenv("INDEED_MAX_CONCURRENCY", raising=False)
     monkeypatch.delenv("STEPSTONE_MAX_RESULTS_PER_SEARCH", raising=False)
     monkeypatch.delenv("STEPSTONE_MAX_CONCURRENCY", raising=False)
+    monkeypatch.delenv("XING_MAX_RESULTS_PER_SEARCH", raising=False)
+    monkeypatch.delenv("XING_MAX_CONCURRENCY", raising=False)
     monkeypatch.setattr("jobfinder.scraper.settings.load_filter_config", lambda _: {})
     monkeypatch.setattr("jobfinder.scraper.settings.load_keywords", lambda _: ["GIS"])
 
@@ -46,6 +48,8 @@ def test_load_scraper_settings_clamps_provider_payload_limits(monkeypatch):
                 "INDEED_MAX_CONCURRENCY": "0",
                 "STEPSTONE_MAX_RESULTS_PER_SEARCH": "-20",
                 "STEPSTONE_MAX_CONCURRENCY": "0",
+                "XING_MAX_RESULTS_PER_SEARCH": "-30",
+                "XING_MAX_CONCURRENCY": "0",
                 "JOBSCRAPER_SEARCH_CONCURRENCY": "15",
                 "JOBSCRAPER_APIFY_MEMORY_LIMIT_MB": "1024",
                 "APIFY_RUN_MEMORY_MB": "512",
@@ -59,9 +63,16 @@ def test_load_scraper_settings_clamps_provider_payload_limits(monkeypatch):
     assert settings.indeed_max_concurrency == 1
     assert settings.stepstone_max_results_per_search == 1
     assert settings.stepstone_max_concurrency == 1
+    assert settings.xing_max_results_per_search == 1
+    assert settings.xing_max_concurrency == 1
     assert settings.search_concurrency == 2
     assert settings.apify_batch_size == 3
-    assert settings.provider_max_items == {"linkedin": 1, "indeed": 1, "stepstone": 1}
+    assert settings.provider_max_items == {
+        "linkedin": 1,
+        "indeed": 1,
+        "stepstone": 1,
+        "xing": 1,
+    }
 
 
 def test_load_scraper_settings_reads_canonical_scraper_env_aliases(monkeypatch):
@@ -143,7 +154,7 @@ def test_load_scraper_settings_reads_stepstone_defaults_and_overrides(monkeypatc
     """Stepstone should be a first-class source with safe defaults."""
     monkeypatch.setattr(
         "jobfinder.scraper.settings.load_filter_config",
-        lambda _: {"stepstone_search": {"location": "berlin", "category": "it"}},
+        lambda _: {"stepstone_search": {"location": "Germany", "category": "it"}},
     )
     monkeypatch.setattr("jobfinder.scraper.settings.load_keywords", lambda _: ["GIS"])
 
@@ -163,7 +174,7 @@ def test_load_scraper_settings_reads_stepstone_defaults_and_overrides(monkeypatc
     assert settings.provider_actor_ids["stepstone"] == (
         "memo23~stepstone-search-cheerio-ppr"
     )
-    assert settings.stepstone_location == "berlin"
+    assert settings.stepstone_location == "Germany"
     assert settings.stepstone_category == "it"
     assert settings.stepstone_start_urls == [
         "https://www.stepstone.de/jobs/software",
@@ -171,3 +182,42 @@ def test_load_scraper_settings_reads_stepstone_defaults_and_overrides(monkeypatc
     ]
     assert settings.stepstone_max_concurrency == 4
     assert settings.provider_max_items["stepstone"] == 500
+
+
+def test_load_scraper_settings_reads_xing_defaults_and_overrides(monkeypatch):
+    """Xing should be a first-class source with safe defaults."""
+    monkeypatch.setattr(
+        "jobfinder.scraper.settings.load_filter_config",
+        lambda _: {
+            "xing_search": {
+                "location": "Germany",
+                "discipline": "",
+                "remote": "Hybrid",
+                "start_url": "https://www.xing.com/jobs/t-remote?keywords=Remote",
+                "max_pages": 7,
+            }
+        },
+    )
+    monkeypatch.setattr("jobfinder.scraper.settings.load_keywords", lambda _: ["GIS"])
+
+    settings = load_scraper_settings(
+        EnvSettings(
+            {
+                "APIFY_API_TOKEN": "apify_api_real_token",
+                "XING_MAX_RESULTS_PER_SEARCH": "75",
+                "XING_MAX_CONCURRENCY": "3",
+            }
+        )
+    )
+
+    assert settings.provider_actor_ids["xing"] == "shahidirfan~Xing-Jobs-Scraper"
+    assert settings.xing_location == "Germany"
+    assert settings.xing_discipline == ""
+    assert settings.xing_remote == "Hybrid"
+    assert settings.xing_start_url == (
+        "https://www.xing.com/jobs/t-remote?keywords=Remote"
+    )
+    assert settings.xing_max_results_per_search == 75
+    assert settings.xing_max_pages == 7
+    assert settings.xing_max_concurrency == 3
+    assert settings.provider_max_items["xing"] == 75

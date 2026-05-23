@@ -139,6 +139,8 @@ def run_scrape(settings: ScraperSettings) -> ScrapeResult:
         LOGGER.info("Indeed actor: %s.", settings.provider_actor_ids["indeed"])
     if "stepstone" in job_providers:
         LOGGER.info("Stepstone actor: %s.", settings.provider_actor_ids["stepstone"])
+    if "xing" in job_providers:
+        LOGGER.info("Xing actor: %s.", settings.provider_actor_ids["xing"])
     LOGGER.info("Search plan: %s.", search_plan_summary)
     LOGGER.info("Output mode: %s.", ", ".join(sorted(output_modes)))
     LOGGER.info("Timezone: %s.", settings.scraper_timezone)
@@ -222,6 +224,23 @@ def run_scrape(settings: ScraperSettings) -> ScrapeResult:
         LOGGER.info(
             "Stepstone actor concurrency: %s.",
             settings.stepstone_max_concurrency,
+        )
+    if "xing" in job_providers:
+        LOGGER.info("Xing location: %s.", settings.xing_location)
+        if settings.xing_start_url:
+            LOGGER.info("Xing direct URL search: configured.")
+        if settings.xing_discipline:
+            LOGGER.info("Xing discipline: %s.", settings.xing_discipline)
+        if settings.xing_remote:
+            LOGGER.info("Xing remote filter: %s.", settings.xing_remote)
+        LOGGER.info(
+            "Xing max results/search: %s.",
+            settings.xing_max_results_per_search,
+        )
+        LOGGER.info("Xing max pages/search: %s.", settings.xing_max_pages)
+        LOGGER.info(
+            "Xing source concurrency: %s.",
+            settings.xing_max_concurrency,
         )
 
     all_results, zero_searches, failed_sources, skipped_searches = run_all_searches(

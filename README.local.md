@@ -127,14 +127,14 @@ Common settings:
 | Setting | Default | Description |
 |---|---:|---|
 | `APIFY_API_TOKEN` | blank | One Apify token, or 1 to 12 tokens separated by `;` for ordered credit fallback. |
-| `JOBFINDER_SCRAPER_SOURCES` | `linkedin` | Use `linkedin`, `indeed`, `stepstone`, `all`, or comma-separated source names such as `linkedin,stepstone`. |
+| `JOBFINDER_SCRAPER_SOURCES` | `linkedin` | Use `linkedin`, `indeed`, `stepstone`, `xing`, `all`, or comma-separated source names such as `linkedin,stepstone,xing`. |
 | `JOBFINDER_SCRAPER_OUTPUT_MODE` | `excel` | Use `excel`, `google_sheets`, or `both`. The full pipeline forces Google Sheets. |
 | `JOBFINDER_PIPELINE_MODE` | `scrape_and_evaluate` | For `run_job_pipeline.py`, use `scrape_only` or `scrape_and_evaluate`. |
 | `JOBFINDER_SCRAPER_SEARCH_CONCURRENCY` | `15` | Number of Apify searches run at the same time. |
 | `JOBFINDER_SCRAPER_APIFY_MEMORY_LIMIT_MB` | `0` | Optional total Apify memory cap used to reduce search concurrency; `0` disables the cap. |
 | `JOBFINDER_SCRAPER_APIFY_BATCH_SIZE` | `1` | Optional LinkedIn search batch size. Keep `1` unless actor results expose source search URLs for attribution. |
 | `JOBFINDER_SCRAPER_MAX_RESULTS_PER_SEARCH` | `500` | Maximum LinkedIn results per keyword. |
-| `JOBFINDER_SCRAPER_POSTED_TIME_WINDOW` | `since_previous_run` | Use `since_previous_run`, `last_24h`, `last_7d`, or `backfill` to control provider posted-time filters. LinkedIn uses second-based windows; Indeed and Stepstone use the closest supported actor day bucket when possible. |
+| `JOBFINDER_SCRAPER_POSTED_TIME_WINDOW` | `since_previous_run` | Use `since_previous_run`, `last_24h`, `last_7d`, or `backfill` to control provider posted-time filters. LinkedIn uses second-based windows; Indeed and Stepstone use the closest supported actor day bucket when possible. Xing is filtered after scraping when posted dates are present. |
 | `JOBFINDER_SCRAPER_SEARCH_WINDOW_BUFFER_SECONDS` | `3600` | Extra search-window padding before exact posted-time filtering, to avoid missing jobs while the run is starting. |
 | `JOBFINDER_SCRAPER_MAX_APPLICANTS` | `100` | Maximum applicants per job after scraping. Use `0` for no limit. |
 | `APIFY_RUN_MEMORY_MB` | `512` | Memory assigned to each Apify actor run. |
@@ -149,12 +149,19 @@ Common settings:
 | `INDEED_LOCATION` | `Germany` | Indeed location when `JOBFINDER_SCRAPER_SOURCES` includes `indeed`. |
 | `INDEED_MAX_RESULTS_PER_SEARCH` | `500` | Maximum Indeed results per keyword, capped at the actor limit of 1000. |
 | `INDEED_MAX_CONCURRENCY` | `5` | Maximum Indeed actor searches run at the same time. |
-| `STEPSTONE_LOCATION` | `deutschland` | Stepstone location slug for keyword searches. |
+| `STEPSTONE_LOCATION` | `Germany` | Stepstone location for keyword searches. |
 | `STEPSTONE_CATEGORY` | blank | Optional Stepstone category slug used only for category fallback searches. |
 | `STEPSTONE_START_URLS` | blank | Optional comma- or newline-separated Stepstone search/job URLs. When set, Stepstone runs one direct-URL actor search instead of one run per keyword. |
 | `STEPSTONE_MAX_RESULTS_PER_SEARCH` | `500` | Maximum Stepstone results per keyword or direct URL run. |
 | `STEPSTONE_MAX_CONCURRENCY` | `10` | Maximum pages the Stepstone actor processes concurrently inside a run. |
 | `STEPSTONE_MAX_REQUEST_RETRIES` | `3` | Stepstone actor page retry count. |
+| `XING_LOCATION` | `Germany` | Xing country, city, or region filter for keyword searches. |
+| `XING_DISCIPLINE` | blank | Optional Xing discipline filter. Blank means keyword-only role filtering. |
+| `XING_REMOTE` | blank | Optional Xing remote filter passed through to the actor when set. |
+| `XING_START_URL` | blank | Optional direct Xing search URL. When set, Xing runs one direct-URL actor search instead of one run per keyword. |
+| `XING_MAX_RESULTS_PER_SEARCH` | `500` | Maximum Xing results per keyword or direct URL run. |
+| `XING_MAX_PAGES` | `20` | Maximum Xing result pages for the actor to process. |
+| `XING_MAX_CONCURRENCY` | `5` | Maximum Xing actor searches run at the same time. |
 | `JOB_EVAL_SOURCE` | blank | Use `excel` or `google_sheets`; blank auto-selects Google Sheets when a spreadsheet ID exists, otherwise Excel. |
 | `JOB_EVAL_SHEET` | `latest` | Worksheet or Google Sheet tab to evaluate. |
 | `JOB_EVAL_OPENAI_MODEL` | `gpt-5-mini` | OpenAI model used for evaluation. |

@@ -12,6 +12,7 @@ scraper, dedupe, and exporters.
 | LinkedIn | `curious_coder~linkedin-jobs-scraper` | `jobfinder.providers.linkedin` | Build LinkedIn search URLs and actor payloads. |
 | Indeed | `valig~indeed-jobs-scraper` | `jobfinder.providers.indeed` | Build country/title/location payloads, map date windows to actor day buckets, normalize actor output and metadata. |
 | Stepstone | `memo23~stepstone-search-cheerio-ppr` | `jobfinder.providers.stepstone` | Build keyword/location/category or direct-URL payloads, map date windows to actor day buckets, normalize Stepstone URLs and metadata. |
+| Xing | `shahidirfan~Xing-Jobs-Scraper` | `jobfinder.providers.xing` | Build keyword/location/discipline or direct-URL payloads, normalize Xing output and metadata. |
 
 `jobfinder.providers.apify_client` owns the low-level Apify client. The old
 `jobfinder.scraper.providers.*` paths are compatibility facades.
@@ -21,7 +22,7 @@ scraper, dedupe, and exporters.
 New provider-specific code should prefer imports from:
 
 ```python
-from jobfinder.providers import indeed, linkedin, stepstone
+from jobfinder.providers import indeed, linkedin, stepstone, xing
 from jobfinder.providers.registry import provider_adapter
 ```
 
@@ -65,6 +66,8 @@ Adapters map this to each actor's supported filter surface:
 
 - Indeed supports fixed day buckets `1`, `3`, `7`, and `14`.
 - Stepstone supports fixed day buckets `1`, `3`, and `7`.
+- Xing has no provider posted-time input in JobFinder, so filtering happens
+  after scraping when `date_posted` is present.
 - Larger windows omit or relax provider date filters and rely on post-scrape
   filtering where possible.
 

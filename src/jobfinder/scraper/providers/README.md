@@ -3,8 +3,8 @@
 This package contains provider modules historically imported by scraper code.
 It now serves two roles:
 
-- Own the LinkedIn payload builder and low-level Apify client.
-- Re-export Indeed and Stepstone implementations from `jobfinder.providers` for
+- Own the low-level Apify client.
+- Re-export provider implementations from `jobfinder.providers` for
   compatibility.
 
 ## Files
@@ -15,6 +15,7 @@ It now serves two roles:
 | `linkedin.py` | LinkedIn search URL and actor payload construction. |
 | `indeed.py` | Compatibility wrapper around `jobfinder.providers.indeed`. |
 | `stepstone.py` | Compatibility wrapper around `jobfinder.providers.stepstone`. |
+| `xing.py` | Compatibility wrapper around `jobfinder.providers.xing`. |
 
 ## Apify Execution Contract
 

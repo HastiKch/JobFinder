@@ -67,8 +67,8 @@ The pipeline CLI overrides this to `google_sheets`.
 
 ## Source Selection
 
-`JOBFINDER_SCRAPER_SOURCES` supports `linkedin`, `indeed`, `stepstone`, `all`, and
-comma-separated source names.
+`JOBFINDER_SCRAPER_SOURCES` supports `linkedin`, `indeed`, `stepstone`, `xing`,
+`all`, and comma-separated source names.
 
 For each selected source:
 
@@ -77,14 +77,16 @@ For each selected source:
 - Stepstone creates one actor payload per keyword, unless
   `STEPSTONE_START_URLS` is set, in which case it creates one configured-URL
   search.
+- Xing creates one actor payload per keyword, unless `XING_START_URL` is set, in
+  which case it creates one configured-URL search.
 
 ## Concurrency And Retries
 
 The scraper uses:
 
 - Global concurrency from `JOBFINDER_SCRAPER_SEARCH_CONCURRENCY`.
-- Source-specific caps from `INDEED_MAX_CONCURRENCY` and
-  `STEPSTONE_MAX_CONCURRENCY`.
+- Source-specific caps from `INDEED_MAX_CONCURRENCY`,
+  `STEPSTONE_MAX_CONCURRENCY`, and `XING_MAX_CONCURRENCY`.
 - Apify transient retry count from `APIFY_TRANSIENT_ERROR_RETRIES`.
 - Backoff base delay from `APIFY_RETRY_DELAY_SECONDS`.
 - Optional memory-derived concurrency cap from
@@ -143,5 +145,6 @@ Excel export:
 - Do not use provider URLs alone as historical duplicate identity.
 - Preserve keyword attribution when batching. LinkedIn batch fallback reruns
   searches individually if attribution is ambiguous.
-- Keep source failure behavior deliberate. Stepstone failures are currently
-  source-isolated; other search execution failures are fatal.
+- Keep source failure behavior deliberate. Stepstone and Xing failures are
+  currently source-isolated; LinkedIn and Indeed search execution failures are
+  fatal.

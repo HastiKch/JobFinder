@@ -12,6 +12,7 @@ on:
           - linkedin
           - indeed
           - stepstone
+          - xing
           - all
       posted_time_window:
         description: "Provider posted-time window"
@@ -98,9 +99,13 @@ jobs:
       JOBFINDER_SCRAPER_SCRAPE_COMPANY_DETAILS: "false"
       INDEED_COUNTRY: "DE"
       INDEED_LOCATION: "Germany"
-      STEPSTONE_LOCATION: "deutschland"
+      STEPSTONE_LOCATION: "Germany"
       STEPSTONE_MAX_CONCURRENCY: "10"
       STEPSTONE_MAX_REQUEST_RETRIES: "3"
+      XING_LOCATION: "Germany"
+      XING_DISCIPLINE: ""
+      XING_MAX_PAGES: "20"
+      XING_MAX_CONCURRENCY: "5"
       JOBFINDER_SCRAPER_TIMEZONE: Europe/Berlin
       JOBFINDER_SCRAPER_POSTED_TIMEZONE: Europe/Berlin
       JOB_EVAL_OPENAI_MODEL: "gpt-5-mini"

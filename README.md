@@ -1,8 +1,8 @@
 # JobFinder
 
 JobFinder is a Python automation platform for running a repeatable job-search
-workflow. It scrapes job postings from Apify-backed LinkedIn, Indeed, and
-Stepstone actors, normalizes provider-specific output, deduplicates jobs across
+workflow. It scrapes job postings from Apify-backed LinkedIn, Indeed, Stepstone,
+and Xing actors, normalizes provider-specific output, deduplicates jobs across
 keywords and providers, filters unwanted rows, exports to Excel or Google
 Sheets, and optionally evaluates each job with OpenAI against a private prompt
 and private LaTeX CV.
@@ -21,7 +21,7 @@ The core workflow is:
 1. Load private keywords from `configs/keywords.txt`.
 2. Load non-secret filters and provider defaults from `configs/filters.json`.
 3. Resolve runtime settings from environment variables and `.env`.
-4. Build provider searches for LinkedIn, Indeed, Stepstone, or a selected mix.
+4. Build provider searches for LinkedIn, Indeed, Stepstone, Xing, or a selected mix.
 5. Run Apify actors with retries, bounded concurrency, and optional token
    fallback.
 6. Normalize provider output into a stable spreadsheet contract.
@@ -54,7 +54,7 @@ Key capabilities:
 flowchart LR
     A["configs/keywords.txt<br/>configs/filters.json<br/>.env / secrets"] --> B["ScraperSettings"]
     B --> C["Search builder<br/>src/jobfinder/scraper/search.py"]
-    C --> D["Apify actors<br/>LinkedIn / Indeed / Stepstone"]
+    C --> D["Apify actors<br/>LinkedIn / Indeed / Stepstone / Xing"]
     D --> E["Provider normalizers"]
     E --> F["Dedupe pipeline<br/>src/jobfinder/dedupe"]
     F --> G["Final filters<br/>title / company / applicants / posted window"]
@@ -91,8 +91,9 @@ Supported values:
 | `linkedin` | LinkedIn only |
 | `indeed` | Indeed only |
 | `stepstone` | Stepstone only |
-| `all` | LinkedIn, Indeed, and Stepstone |
-| `linkedin,stepstone` | Explicit comma-separated source list |
+| `xing` | Xing only |
+| `all` | LinkedIn, Indeed, Stepstone, and Xing |
+| `linkedin,stepstone,xing` | Explicit comma-separated source list |
 
 Current Apify actors:
 
@@ -101,6 +102,7 @@ Current Apify actors:
 | LinkedIn | `curious_coder~linkedin-jobs-scraper` | Builds LinkedIn search URLs from keyword, location, geo ID, experience level, job type, and posted-time window. Optional LinkedIn batching is supported only when result attribution is safe. |
 | Indeed | `valig~indeed-jobs-scraper` | Builds actor payloads with country, title, location, result limit, and supported day-bucket date filters. Normalizes employer, salary, benefit, skill, education, seniority, and remote metadata. |
 | Stepstone | `memo23~stepstone-search-cheerio-ppr` | Builds keyword/location/category payloads or a single direct-URL payload. Normalizes relative URLs, salary, work mode, labels, skills, category, and company metadata. |
+| Xing | `shahidirfan~Xing-Jobs-Scraper` | Builds keyword/location/discipline payloads or a single direct search URL payload. Normalizes Xing IDs, company details, salary, work mode, keywords, application links, and description metadata. |
 
 `src/jobfinder/providers` contains the stable provider adapter surface for new
 code, including the provider registry and low-level Apify client.
@@ -120,7 +122,7 @@ code.
    - `last_24h` and `last_7d` force fixed provider windows.
    - `backfill` removes the provider posted-time filter.
 4. `search.py` builds one `SearchRequest` per provider/keyword, except
-   Stepstone direct URL mode, which creates one configured-URL run.
+   Stepstone and Xing direct URL modes, which create one configured-URL run.
 5. Searches run through Apify with global and source-specific concurrency
    limits.
 6. Temporary Apify failures are retried. Exhausted or unauthorized Apify tokens
@@ -128,9 +130,9 @@ code.
 7. Provider output is annotated with `_source` and `_source_label`, then passed
    into dedupe.
 
-Stepstone search failures are isolated by source so other providers can still
-complete. Non-Stepstone search execution failures are treated as fatal because
-they usually indicate the selected main source did not complete.
+Stepstone and Xing search failures are isolated by source so other providers can
+still complete. LinkedIn and Indeed search execution failures are treated as
+fatal because they usually indicate the selected main source did not complete.
 
 ### Dedupe Flow
 
@@ -147,8 +149,8 @@ The matcher uses:
 
 The matcher deliberately does not use provider job URLs as a cross-provider
 identity signal. Provider URLs are useful for provenance, but the same real-world
-job often has different board-specific IDs across LinkedIn, Indeed, and
-Stepstone.
+job often has different board-specific IDs across LinkedIn, Indeed, Stepstone,
+and Xing.
 
 Merged jobs preserve:
 
@@ -436,7 +438,7 @@ Examples:
 ```bash
 JOBFINDER_SCRAPER_OUTPUT_MODE=excel JOBFINDER_SCRAPER_SOURCES=linkedin python linkedin_job_scraper.py
 JOBFINDER_SCRAPER_OUTPUT_MODE=both JOBFINDER_SCRAPER_SOURCES=all python linkedin_job_scraper.py
-JOBFINDER_SCRAPER_OUTPUT_MODE=google_sheets JOBFINDER_SCRAPER_SOURCES=linkedin,stepstone python linkedin_job_scraper.py
+JOBFINDER_SCRAPER_OUTPUT_MODE=google_sheets JOBFINDER_SCRAPER_SOURCES=linkedin,stepstone,xing python linkedin_job_scraper.py
 ```
 
 ### Evaluator CLI
@@ -474,7 +476,7 @@ Environment variables override values from `.env`.
 | `OPENAI_API_KEY` | blank | Required for evaluator and full pipeline runs. |
 | `GOOGLE_SPREADSHEET_ID` | blank | Google Sheet ID. Also read from `google_spreadsheet_id.txt` when absent. |
 | `JOBFINDER_SCRAPER_OUTPUT_MODE` | `excel` | `excel`, `google_sheets`, or `both`. Full pipeline forces `google_sheets`. |
-| `JOBFINDER_SCRAPER_SOURCES` | `linkedin` | `linkedin`, `indeed`, `stepstone`, `all`, or comma-separated source names. |
+| `JOBFINDER_SCRAPER_SOURCES` | `linkedin` | `linkedin`, `indeed`, `stepstone`, `xing`, `all`, or comma-separated source names. |
 | `JOBFINDER_PIPELINE_MODE` | `scrape_and_evaluate` | Used by the pipeline when `--mode` is omitted. |
 | `JOBFINDER_SCRAPER_TIMEZONE` | `Europe/Berlin` | Timezone for logs and timestamped worksheet names. |
 | `JOBFINDER_SCRAPER_POSTED_TIMEZONE` | `Europe/Berlin` | Timezone used for the `Posted` spreadsheet column and exact posted-window filtering. |
@@ -518,7 +520,7 @@ post-scrape filtering.
 
 | Variable | Default | Description |
 |---|---:|---|
-| `STEPSTONE_LOCATION` | value from `filters.json` or `deutschland` | Location slug source for keyword searches. |
+| `STEPSTONE_LOCATION` | value from `filters.json` or `Germany` | Location source for keyword searches. |
 | `STEPSTONE_CATEGORY` | value from `filters.json` or blank | Optional category fallback when no keyword is used. |
 | `STEPSTONE_START_URLS` | blank | Comma- or newline-separated Stepstone URLs. When set, Stepstone runs one direct-URL actor search instead of one search per keyword. |
 | `STEPSTONE_MAX_RESULTS_PER_SEARCH` | `500` | Max results per keyword or direct URL run. |
@@ -530,6 +532,23 @@ post-scrape filtering.
 
 Stepstone date filtering maps `rSECONDS` windows to supported day buckets:
 `1`, `3`, or `7`. Longer windows use `all`.
+
+### Xing
+
+| Variable | Default | Description |
+|---|---:|---|
+| `XING_LOCATION` | value from `filters.json` or LinkedIn location | Country, city, or region filter for keyword searches. |
+| `XING_DISCIPLINE` | blank | Optional professional discipline filter. Blank means keyword-only role filtering. |
+| `XING_REMOTE` | blank | Optional remote filter passed through to the actor when set. |
+| `XING_START_URL` | value from `filters.json` or blank | Optional direct Xing search URL. When set, Xing runs one direct-URL actor search instead of one search per keyword. |
+| `XING_MAX_RESULTS_PER_SEARCH` | `500` | Max results per keyword or direct URL run. |
+| `XING_MAX_PAGES` | `20` | Maximum Xing result pages for the actor to process. |
+| `XING_MAX_CONCURRENCY` | `5` | Source-specific cap for simultaneous Xing searches in JobFinder. |
+| `XING_USE_APIFY_PROXY` | `true` | Actor proxy setting. |
+| `XING_APIFY_PROXY_GROUPS` | `RESIDENTIAL` | Comma- or newline-separated Apify proxy groups. |
+
+The Xing actor does not expose a posted-time input in JobFinder. Posted-window
+filtering is applied after scraping when Xing returns `date_posted` values.
 
 ### Evaluator
 
@@ -579,6 +598,7 @@ Current sections:
 |---|---|---|
 | `linkedin_search` | `location`, `geo_id`, `published_at`, `experience_levels`, `contract_types`, `split_country` | LinkedIn URL builder and scraper settings. |
 | `stepstone_search` | `location`, `category`, `start_urls` | Stepstone settings fallback when env vars are not set. |
+| `xing_search` | `location`, `discipline`, `remote`, `start_url`, `max_pages` | Xing settings fallback when env vars are not set. |
 | `final_filters` | `excluded_title_terms`, `excluded_company_terms`, `max_applicants` | Final in-memory filters after dedupe. |
 | `spreadsheet` | `application_status_options` | Google Sheets dropdown validation. |
 
@@ -593,8 +613,8 @@ geospatial data
 remote sensing
 ```
 
-Each keyword is searched against each selected provider, except Stepstone direct
-URL mode.
+Each keyword is searched against each selected provider, except Stepstone and
+Xing direct URL modes.
 
 ## Google Sheets Output
 
@@ -636,7 +656,7 @@ The repository has two workflow files:
 
 The production workflow supports manual inputs:
 
-- `sources`: `linkedin`, `indeed`, `stepstone`, or `all`.
+- `sources`: `linkedin`, `indeed`, `stepstone`, `xing`, or `all`.
 - `posted_time_window`: `since_previous_run`, `last_24h`, `last_7d`, or
   `backfill`.
 - `max_applicants`: `50`, `100`, `200`, or `no_limit`.
@@ -760,6 +780,9 @@ JOBFINDER_SCRAPER_SEARCH_CONCURRENCY=2 JOBFINDER_SCRAPER_OUTPUT_MODE=excel pytho
 # Exercise only Stepstone direct URL mode.
 JOBFINDER_SCRAPER_SOURCES=stepstone STEPSTONE_START_URLS="https://www.stepstone.de/jobs/software" python linkedin_job_scraper.py
 
+# Exercise only Xing direct URL mode.
+JOBFINDER_SCRAPER_SOURCES=xing XING_START_URL="https://www.xing.com/jobs/t-remote?keywords=Remote&location=Germany" python linkedin_job_scraper.py
+
 # Evaluate but preserve all rejected rows for prompt analysis.
 JOB_EVAL_UNSUITABLE_ROW_POLICY=keep_all python job_fit_evaluator.py --source google_sheets --sheet latest
 ```
@@ -790,7 +813,7 @@ cleanup, run the relevant focused tests plus the full suite.
 | `APIFY_API_TOKEN supports at most 12` | Too many fallback tokens pasted. | Keep 1 to 12 semicolon-separated unique tokens. |
 | Apify 401/403/402 failures | Invalid token, actor access issue, or billing problem. | Confirm token account can run the configured actor and has billing/trial access. |
 | Apify transient 502/503/504 or timeout | Actor/API instability or too much concurrency. | Lower search concurrency, lower per-search limits, or increase timeout. |
-| No jobs found | Search/filter window too narrow or provider config mismatch. | Check keywords, provider source, posted-time window, Stepstone location/start URLs, and final filters. |
+| No jobs found | Search/filter window too narrow or provider config mismatch. | Check keywords, provider source, posted-time window, Stepstone/Xing location/start URLs, and final filters. |
 | Google Sheets auth fails | Missing/invalid `google_token.json`, disabled API, wrong account, or insufficient scopes. | Enable Sheets and Drive APIs, delete `google_token.json`, and run `python -m jobfinder.google_auth` again. |
 | Drive upload fails | Missing folder ID, missing/invalid `google_token.json`, Drive API disabled, wrong account, or insufficient scopes. | Set `JOB_EVAL_CV_DRIVE_FOLDER_ID`, confirm the folder is accessible to the authorized account, and recreate the token if needed. |
 | Spreadsheet not found | Full URL pasted instead of ID, or wrong account. | Use only the ID from `/spreadsheets/d/<id>/`. |
@@ -822,11 +845,11 @@ cleanup, run the relevant focused tests plus the full suite.
 Apify cost drivers:
 
 - Number of keywords times selected providers.
-- `JOBFINDER_SCRAPER_MAX_RESULTS_PER_SEARCH`, `INDEED_MAX_RESULTS_PER_SEARCH`, and
-  `STEPSTONE_MAX_RESULTS_PER_SEARCH`.
+- `JOBFINDER_SCRAPER_MAX_RESULTS_PER_SEARCH`, `INDEED_MAX_RESULTS_PER_SEARCH`,
+  `STEPSTONE_MAX_RESULTS_PER_SEARCH`, and `XING_MAX_RESULTS_PER_SEARCH`.
 - Actor memory and runtime.
 - Repeated backfills.
-- Stepstone direct URL breadth.
+- Stepstone and Xing direct URL breadth.
 
 OpenAI cost drivers:
 

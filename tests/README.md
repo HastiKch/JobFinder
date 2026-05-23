@@ -36,6 +36,7 @@ python -m pytest
 | `test_cv_pdf_output.py` | PDF filename sanitization, CV ID assignment, LaTeX compile failures, Drive folder ID handling, and mocked Drive uploads. |
 | `test_indeed_provider.py` | Indeed actor payloads and normalization. |
 | `test_stepstone_provider.py` | Stepstone actor payloads and normalization. |
+| `test_xing_provider.py` | Xing actor payloads and normalization. |
 | `test_evaluator_parsing.py` | Header updates, prompt row extraction, model-response parsing, and cleanup column selection. |
 | `test_evaluator_storage.py` | Excel/Google writes, incremental-save cleanup behavior, and unsuitable-row policy. |
 | `test_evaluator_openai_client.py` | Evaluator batching, callbacks, and large-queue pacing. |

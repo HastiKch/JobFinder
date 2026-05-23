@@ -14,7 +14,7 @@ from jobfinder.dedupe.normalize import (
     unique_ordered,
 )
 
-SOURCE_ORDER = ("linkedin", "indeed", "stepstone")
+SOURCE_ORDER = ("linkedin", "indeed", "stepstone", "xing")
 SOURCE_ORDER_INDEX = {source: idx for idx, source in enumerate(SOURCE_ORDER)}
 DESCRIPTION_FIELDS = (
     "descriptionText",
@@ -264,7 +264,11 @@ def merge_cluster(jobs: list[NormalizedJob]) -> dict[str, Any]:
     if company_details:
         merged["companyDetails"] = company_details
 
-    for metadata_key in ("_jobfinder_indeed_metadata", "_jobfinder_stepstone_metadata"):
+    for metadata_key in (
+        "_jobfinder_indeed_metadata",
+        "_jobfinder_stepstone_metadata",
+        "_jobfinder_xing_metadata",
+    ):
         metadata = merge_dicts_by_richness([job.raw.get(metadata_key) for job in jobs])
         if metadata:
             merged[metadata_key] = metadata

@@ -209,7 +209,7 @@ def get_location(job: dict[str, Any]) -> str:
 def get_job_url(settings: ScraperSettings, job: dict[str, Any]) -> str:
     """Return the best available public job URL."""
     source = job.get("_source")
-    if source in {"indeed", "stepstone"}:
+    if source in {"indeed", "stepstone", "xing"}:
         url = (
             job.get("url")
             or job.get("link")
@@ -242,6 +242,9 @@ def get_job_url(settings: ScraperSettings, job: dict[str, Any]) -> str:
             return f"{indeed_base_url(settings)}/viewjob?jk={job_id}"
         if source == "linkedin":
             return f"https://www.linkedin.com/jobs/view/{job_id}/"
+        if source == "xing":
+            slug = job.get("slug") or job_id
+            return f"https://www.xing.com/jobs/{slug}"
     return "N/A"
 
 
@@ -483,6 +486,7 @@ def legacy_provider_job_key(job: dict[str, Any]) -> str:
         or job.get("indeedKey")
         or job.get("stepstoneId")
         or job.get("harmonisedId")
+        or job.get("xingId")
         or job.get("key")
         or job.get("jobKey")
         or job.get("id")

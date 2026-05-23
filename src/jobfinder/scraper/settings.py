@@ -44,6 +44,7 @@ LINKEDIN_ACTOR_ID = "curious_coder~linkedin-jobs-scraper"
 INDEED_ACTOR_ID = "valig~indeed-jobs-scraper"
 INDEED_MAX_RESULTS_LIMIT = 1000
 STEPSTONE_ACTOR_ID = "memo23~stepstone-search-cheerio-ppr"
+XING_ACTOR_ID = "shahidirfan~Xing-Jobs-Scraper"
 
 TOKEN_ENV_VAR = APIFY_API_TOKEN_ENV
 """Backward-compatible alias for the Apify token environment variable name."""
@@ -51,11 +52,12 @@ TOKEN_ENV_VAR = APIFY_API_TOKEN_ENV
 SPREADSHEET_TITLE = DEFAULT_SPREADSHEET_TITLE
 """Backward-compatible alias for the default spreadsheet title."""
 
-SOURCE_ORDER = ("linkedin", "indeed", "stepstone")
+SOURCE_ORDER = ("linkedin", "indeed", "stepstone", "xing")
 SOURCE_DISPLAY_NAMES = {
     "linkedin": "LinkedIn",
     "indeed": "Indeed",
     "stepstone": "Stepstone",
+    "xing": "Xing",
 }
 SOURCE_ALIASES = {
     "linkedin": {"linkedin"},
@@ -65,7 +67,10 @@ SOURCE_ALIASES = {
     "stepstone_de": {"stepstone"},
     "stepstone-de": {"stepstone"},
     "ss": {"stepstone"},
-    "all": {"linkedin", "indeed", "stepstone"},
+    "xing": {"xing"},
+    "xing_jobs": {"xing"},
+    "xing-jobs": {"xing"},
+    "all": {"linkedin", "indeed", "stepstone", "xing"},
 }
 OUTPUT_MODE_ALIASES = {
     "excel": {"excel"},
@@ -259,6 +264,15 @@ class ScraperSettings:
     stepstone_max_request_retries: int
     stepstone_use_apify_proxy: bool
     stepstone_proxy_groups: list[str]
+    xing_location: str
+    xing_discipline: str
+    xing_remote: str
+    xing_start_url: str
+    xing_max_results_per_search: int
+    xing_max_pages: int
+    xing_max_concurrency: int
+    xing_use_apify_proxy: bool
+    xing_proxy_groups: list[str]
     source_actor_ids: dict[str, str]
     source_max_items: dict[str, int]
 
@@ -336,6 +350,10 @@ def load_scraper_settings(env: EnvSettings | None = None) -> ScraperSettings:
     stepstone_max_results = max(
         1,
         env.get_int("STEPSTONE_MAX_RESULTS_PER_SEARCH", max_results_per_search),
+    )
+    xing_max_results = max(
+        1,
+        env.get_int("XING_MAX_RESULTS_PER_SEARCH", max_results_per_search),
     )
     apify_run_timeout_seconds = max(
         60,
@@ -524,7 +542,7 @@ def load_scraper_settings(env: EnvSettings | None = None) -> ScraperSettings:
         ),
         stepstone_location=env.get(
             "STEPSTONE_LOCATION",
-            config_str(filter_config, "stepstone_search", "location", "deutschland"),
+            config_str(filter_config, "stepstone_search", "location", "Germany"),
         ),
         stepstone_category=env.get(
             "STEPSTONE_CATEGORY",
@@ -546,15 +564,49 @@ def load_scraper_settings(env: EnvSettings | None = None) -> ScraperSettings:
         stepstone_proxy_groups=parse_env_list(
             env.get("STEPSTONE_APIFY_PROXY_GROUPS", "RESIDENTIAL")
         ),
+        xing_location=env.get(
+            "XING_LOCATION",
+            config_str(filter_config, "xing_search", "location", location),
+        ),
+        xing_discipline=env.get(
+            "XING_DISCIPLINE",
+            config_str(filter_config, "xing_search", "discipline", ""),
+        ),
+        xing_remote=env.get(
+            "XING_REMOTE",
+            config_str(filter_config, "xing_search", "remote", ""),
+        ),
+        xing_start_url=env.get(
+            "XING_START_URL",
+            config_str(filter_config, "xing_search", "start_url", ""),
+        ),
+        xing_max_results_per_search=xing_max_results,
+        xing_max_pages=max(
+            1,
+            env.get_int(
+                "XING_MAX_PAGES",
+                config_int(filter_config, "xing_search", "max_pages", 20),
+            ),
+        ),
+        xing_max_concurrency=min(
+            MAX_PROVIDER_CONCURRENCY,
+            max(1, env.get_int("XING_MAX_CONCURRENCY", 5)),
+        ),
+        xing_use_apify_proxy=env.get_bool("XING_USE_APIFY_PROXY", True),
+        xing_proxy_groups=parse_env_list(
+            env.get("XING_APIFY_PROXY_GROUPS", "RESIDENTIAL")
+        ),
         source_actor_ids={
             "linkedin": LINKEDIN_ACTOR_ID,
             "indeed": INDEED_ACTOR_ID,
             "stepstone": STEPSTONE_ACTOR_ID,
+            "xing": XING_ACTOR_ID,
         },
         source_max_items={
             "linkedin": max_results_per_search,
             "indeed": indeed_max_results,
             "stepstone": stepstone_max_results,
+            "xing": xing_max_results,
         },
     )
 

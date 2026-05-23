@@ -36,8 +36,8 @@ geospatial data
 remote sensing
 ```
 
-Each keyword is searched against each selected provider, except Stepstone direct
-URL mode.
+Each keyword is searched against each selected provider, except Stepstone and
+Xing direct URL modes.
 
 ## `filters.json`
 
@@ -47,6 +47,7 @@ Current sections:
 {
   "linkedin_search": {},
   "stepstone_search": {},
+  "xing_search": {},
   "final_filters": {},
   "spreadsheet": {}
 }
@@ -70,6 +71,16 @@ Current sections:
 | `location` | Stepstone location fallback when `STEPSTONE_LOCATION` is unset. |
 | `category` | Optional Stepstone category fallback. |
 | `start_urls` | Optional direct URL list. Overridden by `STEPSTONE_START_URLS`. |
+
+### `xing_search`
+
+| Key | Meaning |
+|---|---|
+| `location` | Xing location fallback when `XING_LOCATION` is unset. |
+| `discipline` | Optional Xing discipline fallback. |
+| `remote` | Optional Xing remote filter fallback. |
+| `start_url` | Optional direct Xing search URL. Overridden by `XING_START_URL`. |
+| `max_pages` | Maximum Xing result pages when `XING_MAX_PAGES` is unset. |
 
 ### `final_filters`
 

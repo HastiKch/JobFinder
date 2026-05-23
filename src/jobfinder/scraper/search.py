@@ -11,7 +11,7 @@ from typing import Any
 
 import requests
 
-from jobfinder.providers import indeed, linkedin, stepstone
+from jobfinder.providers import indeed, linkedin, stepstone, xing
 from jobfinder.providers.apify_client import (
     ApifyAccountUnavailableError,
     ApifyConfigurationError,
@@ -47,6 +47,7 @@ __all__ = [
     "build_linkedin_actor_input",
     "build_linkedin_search_url",
     "build_stepstone_actor_input",
+    "build_xing_actor_input",
     "fetch_jobs_for_search",
     "get_searches",
     "indeed_base_url",
@@ -180,6 +181,11 @@ def build_stepstone_actor_input(
     return stepstone.build_actor_input(settings, keyword)
 
 
+def build_xing_actor_input(settings: ScraperSettings, keyword: str) -> dict[str, Any]:
+    """Build the Apify actor payload for Xing searches."""
+    return xing.build_actor_input(settings, keyword)
+
+
 def build_actor_input(
     settings: ScraperSettings, source: str, keyword: str
 ) -> dict[str, Any]:
@@ -265,6 +271,24 @@ def build_source_searches(
                 provider_label=label,
                 keyword="Configured URLs",
                 display_label=f"{label} / configured URLs",
+                actor_id=provider_actor_ids[source],
+                payload=provider_adapter(source).build_direct_input(settings),
+                max_items=getattr(
+                    settings,
+                    "provider_max_items",
+                    settings.source_max_items,
+                )[source],
+            )
+        ]
+
+    if source == "xing" and settings.xing_start_url:
+        label = source_label(source)
+        return [
+            SearchRequest(
+                provider=source,
+                provider_label=label,
+                keyword="Configured URL",
+                display_label=f"{label} / configured URL",
                 actor_id=provider_actor_ids[source],
                 payload=provider_adapter(source).build_direct_input(settings),
                 max_items=getattr(
@@ -488,6 +512,8 @@ def provider_concurrency_limit(settings: ScraperSettings, provider: str) -> int:
         return max(1, settings.indeed_max_concurrency)
     if provider == "stepstone":
         return max(1, settings.stepstone_max_concurrency)
+    if provider == "xing":
+        return max(1, settings.xing_max_concurrency)
     return max(1, settings.search_concurrency)
 
 
@@ -590,7 +616,7 @@ def run_all_searches(
                         search.display_label for _, search in batch.searches
                     )
                 except SearchExecutionError as exc:
-                    if batch.provider == "stepstone":
+                    if batch.provider in {"stepstone", "xing"}:
                         if batch.provider not in failed_sources:
                             LOGGER.error("%s", exc)
                             LOGGER.warning(

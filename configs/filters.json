@@ -15,9 +15,16 @@
     "split_country": "DE"
   },
   "stepstone_search": {
-    "location": "deutschland",
+    "location": "Germany",
     "category": "",
     "start_urls": []
+  },
+  "xing_search": {
+    "location": "Germany",
+    "discipline": "",
+    "remote": "",
+    "start_url": "",
+    "max_pages": 20
   },
   "final_filters": {
     "excluded_title_terms": [

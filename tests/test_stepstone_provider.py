@@ -17,7 +17,7 @@ def make_settings(**overrides: Any) -> SimpleNamespace:
     """Build the provider settings used by Stepstone tests."""
     values = {
         "published_at": "r86400",
-        "stepstone_location": "Deutschland",
+        "stepstone_location": "Germany",
         "stepstone_category": "",
         "stepstone_start_urls": [],
         "stepstone_max_results_per_search": 500,
@@ -80,7 +80,7 @@ def test_build_actor_input_uses_keyword_location_and_date_bucket():
 
     assert payload == {
         "keyword": "data-analyst",
-        "location": "deutschland",
+        "location": "germany",
         "postedWithin": "3",
         "maxItems": 250,
         "maxConcurrency": 10,

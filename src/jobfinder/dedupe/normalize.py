@@ -26,6 +26,7 @@ KNOWN_SOURCE_LABELS = {
     "linkedin": "LinkedIn",
     "indeed": "Indeed",
     "stepstone": "Stepstone",
+    "xing": "Xing",
 }
 SOURCE_ALIASES = {
     "linked in": "linkedin",
@@ -33,6 +34,8 @@ SOURCE_ALIASES = {
     "indeed": "indeed",
     "stepstone": "stepstone",
     "stepstone de": "stepstone",
+    "xing": "xing",
+    "xing jobs": "xing",
 }
 LEGAL_SUFFIXES = {
     "ab",
@@ -151,6 +154,7 @@ STEPSTONE_JOB_ID_RE = re.compile(
     r"--(?P<id>\d+)(?:-inline)?\.html",
     re.IGNORECASE,
 )
+XING_JOB_ID_RE = re.compile(r"/jobs/[^/?#]*-(?P<id>\d+)(?:[/?#]|$)")
 SALARY_TEXT_KEYS = (
     "salary",
     "salaryText",
@@ -202,6 +206,7 @@ JOB_ID_KEYS = (
     "indeedKey",
     "stepstoneId",
     "harmonisedId",
+    "xingId",
     "key",
     "jobKey",
     "id",
@@ -411,6 +416,11 @@ def canonical_url(value: Any) -> str:
         if match:
             return f"stepstone:job:{match.group('id')}"
 
+    if "xing.com" in host:
+        match = XING_JOB_ID_RE.search(path)
+        if match:
+            return f"xing:job:{match.group('id')}"
+
     query_pairs = []
     for key, value_text in parse_qsl(parsed.query, keep_blank_values=False):
         key_lower = key.casefold()
@@ -426,7 +436,9 @@ def canonical_url(value: Any) -> str:
 
 def is_platform_url_key(url_key: str) -> bool:
     """Return true for provider-owned public job URL keys."""
-    return url_key.startswith(("linkedin:job:", "indeed:job:", "stepstone:job:"))
+    return url_key.startswith(
+        ("linkedin:job:", "indeed:job:", "stepstone:job:", "xing:job:")
+    )
 
 
 def canonical_external_apply_url(value: Any) -> str:
@@ -434,14 +446,14 @@ def canonical_external_apply_url(value: Any) -> str:
     key = canonical_url(value)
     if not key or is_platform_url_key(key):
         return ""
-    if any(host in key for host in ("linkedin.com", "indeed.", "stepstone.")):
+    if any(host in key for host in ("linkedin.com", "indeed.", "stepstone.", "xing.")):
         return ""
     return key
 
 
 def job_url_from_job(job: dict[str, Any], source: str) -> str:
     """Extract the public job URL using source-specific field priority."""
-    if source in {"indeed", "stepstone"}:
+    if source in {"indeed", "stepstone", "xing"}:
         return first_text(job, "url", "link", "jobUrl", "job_url")
     return first_text(
         job,
@@ -482,7 +494,9 @@ def job_id_from_job(job: dict[str, Any], job_url_key: str = "") -> str:
     job_id = first_text(job, *JOB_ID_KEYS)
     if job_id:
         return job_id
-    if job_url_key.startswith(("linkedin:job:", "indeed:job:", "stepstone:job:")):
+    if job_url_key.startswith(
+        ("linkedin:job:", "indeed:job:", "stepstone:job:", "xing:job:")
+    ):
         return job_url_key.rsplit(":", 1)[-1]
     return ""
 
@@ -544,7 +558,11 @@ def description_from_job(job: dict[str, Any]) -> str:
 def salary_text_from_job(job: dict[str, Any]) -> str:
     """Collect salary text from raw and provider metadata fields."""
     candidates = [first_text(job, *SALARY_TEXT_KEYS)]
-    for metadata_key in ("_jobfinder_indeed_metadata", "_jobfinder_stepstone_metadata"):
+    for metadata_key in (
+        "_jobfinder_indeed_metadata",
+        "_jobfinder_stepstone_metadata",
+        "_jobfinder_xing_metadata",
+    ):
         metadata = job.get(metadata_key)
         if isinstance(metadata, dict):
             candidates.append(first_text(metadata, "salary"))
