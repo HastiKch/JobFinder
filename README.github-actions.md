@@ -253,16 +253,22 @@ Drive PDF links to the `AI CV PDF` column.
 
 ## 8. Scheduled Runs
 
-The workflow also runs automatically once per day during the 07:00 UTC hour.
+The workflow runs automatically in the morning, with two same-day fallback
+schedule entries in case GitHub drops or delays the first scheduled event.
 
 The schedule is in `.github/workflows/jobs.yml`:
 
 ```yaml
 schedule:
   - cron: "17 7 * * *"
+  - cron: "37 11 * * *"
+  - cron: "17 15 * * *"
 ```
 
-GitHub may delay scheduled workflows slightly. That is normal.
+GitHub may delay scheduled workflows, and under enough platform load a scheduled
+event can be dropped. The workflow uses a guard job so fallback runs skip the
+expensive pipeline when a scheduled run has already succeeded for the current
+`Europe/Berlin` day. Manual runs always bypass that guard.
 
 To change the schedule, edit the `cron` value in `.github/workflows/jobs.yml`,
 commit the change, and push it to GitHub.

@@ -663,12 +663,17 @@ The production workflow supports manual inputs:
 - `run_mode`: `scrape_and_evaluate` or `scrape_only`.
 - `unsuitable_rows`: `single_label_only` or `keep_all`.
 
-It also runs daily at:
+It also runs on a morning schedule with same-day fallback entries:
 
 ```yaml
 schedule:
   - cron: "17 7 * * *"
+  - cron: "37 11 * * *"
+  - cron: "17 15 * * *"
 ```
+
+Fallback runs are skipped by `daily-run-gate` after one scheduled run has
+already succeeded for the current `Europe/Berlin` day.
 
 Required GitHub secrets:
 

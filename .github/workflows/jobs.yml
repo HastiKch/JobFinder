@@ -52,11 +52,14 @@ on:
           - keep_all
 
   schedule:
-    # Runs once daily during the 07:00 UTC hour. Avoid minute 0 because GitHub
-    # may delay or drop scheduled jobs at the top of the hour under high load.
+    # Runs once in the morning, with two same-day fallbacks. The guard job
+    # skips fallback runs when a scheduled run already succeeded today.
     - cron: "17 7 * * *"
+    - cron: "37 11 * * *"
+    - cron: "17 15 * * *"
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -64,8 +67,108 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  daily-run-gate:
+    name: Check daily pipeline status
+    runs-on: ubuntu-latest
+    outputs:
+      run_pipeline: ${{ steps.daily-gate.outputs.run_pipeline }}
+
+    steps:
+      - name: Decide whether to run pipeline
+        id: daily-gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_EVENT: ${{ github.event_name }}
+          CURRENT_RUN_ID: ${{ github.run_id }}
+          REPOSITORY: ${{ github.repository }}
+          TZ: Europe/Berlin
+        run: |
+          set -euo pipefail
+
+          if [ "${CURRENT_EVENT}" != "schedule" ]; then
+            echo "run_pipeline=true" >> "${GITHUB_OUTPUT}"
+            echo "Manual run; running pipeline."
+            exit 0
+          fi
+
+          bounds="$(
+            python3 - <<'PY'
+          from datetime import datetime, time, timezone
+          from zoneinfo import ZoneInfo
+
+          tz = ZoneInfo("Europe/Berlin")
+          today = datetime.now(tz).date()
+          start = datetime.combine(today, time.min, tzinfo=tz).astimezone(timezone.utc)
+          end = datetime.combine(today, time.max, tzinfo=tz).astimezone(timezone.utc)
+          print(
+              today.isoformat(),
+              start.isoformat().replace("+00:00", "Z"),
+              end.isoformat().replace("+00:00", "Z"),
+          )
+          PY
+          )"
+          read -r local_date utc_start utc_end <<< "${bounds}"
+
+          echo "Checking successful scheduled runs for ${local_date} (${TZ})."
+          echo "UTC window: ${utc_start} to ${utc_end}."
+
+          runs_file="${RUNNER_TEMP}/jobfinder-scheduled-runs.json"
+          if ! gh api \
+            --method GET \
+            "repos/${REPOSITORY}/actions/workflows/jobs.yml/runs" \
+            -f "event=schedule" \
+            -f "status=success" \
+            -f "created=>=${utc_start}" \
+            -f "per_page=100" \
+            > "${runs_file}"; then
+            echo "::warning::Could not inspect previous scheduled runs; running pipeline."
+            echo "run_pipeline=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          already_succeeded="$(
+            UTC_END="${utc_end}" python3 - "${runs_file}" <<'PY'
+          import json
+          import os
+          import sys
+          from datetime import datetime
+
+          current_run_id = int(os.environ["CURRENT_RUN_ID"])
+          utc_end = datetime.fromisoformat(os.environ["UTC_END"].replace("Z", "+00:00"))
+
+          with open(sys.argv[1], encoding="utf-8") as handle:
+              runs = json.load(handle).get("workflow_runs", [])
+
+          for run in runs:
+              if int(run.get("id", 0)) == current_run_id:
+                  continue
+              if run.get("conclusion") != "success":
+                  continue
+              created_at = datetime.fromisoformat(
+                  run["created_at"].replace("Z", "+00:00")
+              )
+              if created_at <= utc_end:
+                  print("true")
+                  break
+          else:
+              print("false")
+          PY
+          )"
+
+          if [ "${already_succeeded}" = "true" ]; then
+            echo "A scheduled pipeline run already succeeded today; skipping fallback."
+            echo "run_pipeline=false" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          echo "No successful scheduled pipeline run found today; running pipeline."
+          echo "run_pipeline=true" >> "${GITHUB_OUTPUT}"
+
   scrape-and-evaluate:
     name: Run JobFinder pipeline
+    needs: daily-run-gate
+    if: needs.daily-run-gate.outputs.run_pipeline == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 360
 

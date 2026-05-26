@@ -34,7 +34,8 @@ Runs JobFinder in GitHub Actions.
 Triggers:
 
 - Manual `workflow_dispatch`.
-- Daily schedule at `17 7 * * *`.
+- Scheduled runs at `17 7 * * *`, `37 11 * * *`, and `17 15 * * *`,
+  with fallback runs guarded by `daily-run-gate`.
 
 Manual inputs:
 
@@ -95,6 +96,9 @@ Reports are generated only when the corresponding env var path is configured.
 
 - `concurrency.cancel-in-progress` is `false`, so scheduled/manual runs do not
   cancel an already running pipeline.
+- Scheduled runs have same-day fallback cron entries. `daily-run-gate` skips
+  fallback runs after one scheduled run has already succeeded for the current
+  `Europe/Berlin` day.
 - The job timeout is 360 minutes.
 - Scheduled runs use default workflow inputs, not the last manual selections.
 - The workflow writes Google OAuth token JSON to a temporary runner file and
