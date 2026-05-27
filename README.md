@@ -227,15 +227,38 @@ Default evaluator policy:
   for the account that should own Sheets and uploaded PDFs.
 - Optional local Excel workflow through `openpyxl`.
 
-Install runtime dependencies with Conda:
+### Fresh Laptop Setup
+
+Run these commands from the repository root. The editable install is important:
+it installs the local `jobfinder` package from `src/`, so commands like
+`python -m jobfinder.google_auth` can find it.
 
 ```bash
 conda create -n JobFinder python=3.14 -y
 conda activate JobFinder
-python -m pip install -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install -e .
 ```
 
-Install development dependencies:
+After this, these should work:
+
+```bash
+python -m jobfinder.google_auth --help
+jobfinder-pipeline --help
+jobfinder-scrape --help
+jobfinder-evaluate --help
+```
+
+If your shell says `python: command not found` after `conda activate
+JobFinder`, the environment is not using the Conda Python. Recreate it with the
+commands above, then confirm:
+
+```bash
+which python
+python --version
+```
+
+For development work, install test and lint tools after the editable install:
 
 ```bash
 python -m pip install -r requirements-dev.txt
@@ -250,21 +273,7 @@ sudo apt-get install -y latexmk texlive-xetex texlive-latex-extra
 On macOS, install a TeX distribution that includes `latexmk` and `xelatex`, such
 as MacTeX.
 
-Install the package in editable mode when you want console scripts:
-
-```bash
-python -m pip install -e .
-```
-
-Editable install exposes:
-
-```bash
-jobfinder-pipeline
-jobfinder-scrape
-jobfinder-evaluate
-```
-
-Without editable install, use the root compatibility scripts:
+If you do not want to install the package, use the root compatibility scripts:
 
 ```bash
 python run_job_pipeline.py --help
@@ -272,10 +281,12 @@ python linkedin_job_scraper.py --help
 python job_fit_evaluator.py --help
 ```
 
-For direct module execution without editable install, set `PYTHONPATH=src`:
+For direct module execution without installing the package, set
+`PYTHONPATH=src`:
 
 ```bash
 env PYTHONPATH=src python -m jobfinder.pipeline.cli --help
+env PYTHONPATH=src python -m jobfinder.google_auth --help
 ```
 
 ## Private Setup
@@ -354,7 +365,7 @@ Set up OAuth once:
    new `jobs` spreadsheet in the authorized user's Drive account.
 7. Set `JOB_EVAL_CV_DRIVE_FOLDER_ID` to the Drive folder ID where timestamped
    PDF run folders should be created.
-8. Verify locally with `env PYTHONPATH=src python -m jobfinder.google_auth --check`.
+8. Verify locally with `python -m jobfinder.google_auth --check`.
 
 For GitHub Actions, paste the contents of `google_token.json` into the
 `GOOGLE_TOKEN_JSON` secret and set `JOB_EVAL_CV_DRIVE_FOLDER_ID`.

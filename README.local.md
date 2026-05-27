@@ -49,9 +49,24 @@ With Conda:
 ```bash
 conda create -n JobFinder python=3.14 -y
 conda activate JobFinder
-python -m pip install -r requirements.txt
+python -m pip install --upgrade pip
+python -m pip install -e .
 cp .env.example .env
 ```
+
+The editable install is the recommended local setup because this repository uses
+a `src/` layout. It installs the local `jobfinder` package, so direct module
+commands such as `python -m jobfinder.google_auth` work on a fresh laptop.
+
+Confirm the environment is using the Conda Python:
+
+```bash
+which python
+python --version
+```
+
+If `python` is not found after activating the environment, recreate it with the
+commands above.
 
 Install LaTeX tools for PDF generation. On Ubuntu:
 
@@ -62,13 +77,7 @@ sudo apt-get install -y latexmk texlive-xetex texlive-latex-extra
 On macOS, install a TeX distribution that includes `latexmk` and `xelatex`, such
 as MacTeX.
 
-Optional: install the package in editable mode if you want the console scripts:
-
-```bash
-python -m pip install -e .
-```
-
-That enables:
+The editable install also enables:
 
 ```bash
 jobfinder-pipeline
@@ -200,7 +209,8 @@ Use Google OAuth for Google Sheets and Google Drive:
 python -m jobfinder.google_auth
 ```
 
-If you have not installed the package, run the module with `PYTHONPATH`:
+If you skipped `python -m pip install -e .`, run direct modules with
+`PYTHONPATH`:
 
 ```bash
 env PYTHONPATH=src python -m jobfinder.google_auth
@@ -245,7 +255,7 @@ JOB_EVAL_CV_DRIVE_FOLDER_ID=1abcDEFghiJKLmnop123FolderId
 Verify the local Google connection:
 
 ```bash
-env PYTHONPATH=src python -m jobfinder.google_auth --check
+python -m jobfinder.google_auth --check
 ```
 
 The check reads the configured spreadsheet and Drive folder, creates a temporary
@@ -277,7 +287,7 @@ Full Google Sheets pipeline:
 python run_job_pipeline.py
 ```
 
-Equivalent console script after `python -m pip install -e .`:
+Equivalent console script:
 
 ```bash
 jobfinder-pipeline
@@ -321,6 +331,7 @@ python job_fit_evaluator.py --source excel --sheet latest
 
 | Problem | What to check |
 |---|---|
+| `No module named 'jobfinder'` | Run `python -m pip install -e .` from the repository root, or prefix direct module commands with `env PYTHONPATH=src`. |
 | `Missing required setting(s): APIFY_API_TOKEN` | Add `APIFY_API_TOKEN` to `.env` or your shell environment. |
 | `Missing required setting(s): OPENAI_API_KEY` | Add `OPENAI_API_KEY`, or run with `--mode scrape_only`. |
 | Google Sheets authentication fails | Confirm `google_token.json` exists, Sheets and Drive APIs are enabled, and the token belongs to the account that owns or can access the sheet. |
