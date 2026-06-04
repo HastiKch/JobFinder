@@ -44,9 +44,8 @@ def pipeline_timezone(env: EnvSettings) -> ZoneInfo:
 
 def read_pipeline_google_spreadsheet_id(env: EnvSettings) -> str:
     """Resolve the Google spreadsheet ID available to the pipeline."""
-    spreadsheet_id = (
-        env.get("JOB_EVAL_GOOGLE_SPREADSHEET_ID")
-        or env.get("GOOGLE_SPREADSHEET_ID")
+    spreadsheet_id = env.get("JOB_EVAL_GOOGLE_SPREADSHEET_ID") or env.get(
+        "GOOGLE_SPREADSHEET_ID"
     )
     if spreadsheet_id:
         return spreadsheet_id
