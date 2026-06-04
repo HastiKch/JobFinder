@@ -6,6 +6,24 @@ Back to the main project overview: [README.md](README.md)
 
 Prefer the cloud workflow instead? See [README.github-actions.md](README.github-actions.md).
 
+## Table Of Contents
+
+- [Usability](#usability)
+- [Pros](#pros)
+- [Cons](#cons)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Use This For Your Own Project](#use-this-for-your-own-project)
+- [1. Install Python Dependencies](#1-install-python-dependencies)
+- [2. Create Private Local Files](#2-create-private-local-files)
+- [3. Configure `.env`](#3-configure-env)
+- [4. Set Up Google Sheets For The Full Pipeline](#4-set-up-google-sheets-for-the-full-pipeline)
+- [5. Run A Preflight Check](#5-run-a-preflight-check)
+- [6. Run JobFinder](#6-run-jobfinder)
+- [7. Read The Results](#7-read-the-results)
+- [8. Troubleshooting Local Runs](#8-troubleshooting-local-runs)
+- [Security Notes](#security-notes)
+
 ## Usability
 
 Local runs are best for first-time setup, debugging provider credentials, changing
@@ -41,6 +59,56 @@ while the job is running.
 - A local clone of this repository.
 
 Run all commands from the repository root.
+
+## Quick Start
+
+Use this path once you have an Apify token and, for full pipeline runs, Google
+OAuth and OpenAI credentials ready:
+
+```bash
+conda create -n JobFinder python=3.14 -y
+conda activate JobFinder
+python -m pip install --upgrade pip
+python -m pip install -e .
+cp .env.example .env
+cp configs/keywords.example.txt configs/keywords.txt
+cp prompts/master_prompt.example.txt prompts/master_prompt.txt
+cp cv/master_cv.example.tex cv/master_cv.tex
+```
+
+Edit `.env`, `configs/keywords.txt`, `prompts/master_prompt.txt`, and
+`cv/master_cv.tex`, then run:
+
+```bash
+python run_job_pipeline.py --mode scrape_only --preflight
+python run_job_pipeline.py --mode scrape_only
+```
+
+For a local Excel-only scrape that does not use Google Sheets:
+
+```bash
+JOBFINDER_SCRAPER_OUTPUT_MODE=excel python linkedin_job_scraper.py
+```
+
+## Use This For Your Own Project
+
+For a local fork, the important customization points are:
+
+| Change | Where |
+|---|---|
+| Search terms | `configs/keywords.txt` |
+| Non-secret search geography and filters | `configs/filters.json` |
+| Local secrets and runtime tuning | `.env` |
+| Evaluator instructions | `prompts/master_prompt.txt` |
+| Private LaTeX CV | `cv/master_cv.tex` |
+| Optional photo path | `JOB_EVAL_CV_PHOTO_FILE` in `.env`; defaults to `cv/photo.jpg` |
+| Applicant name in generated PDF filenames | `JOB_EVAL_CV_PDF_APPLICANT_NAME` |
+| Target Google Sheet | `GOOGLE_SPREADSHEET_ID` or `google_spreadsheet_id.txt` |
+| Target Drive folder for generated CV PDFs | `JOB_EVAL_CV_DRIVE_FOLDER_ID` |
+
+Real environment variables override `.env` values. Prefer the canonical
+`JOBFINDER_SCRAPER_*` names for new settings; legacy `JOBSCRAPER_*` aliases are
+still accepted for older local setups.
 
 ## 1. Install Python Dependencies
 

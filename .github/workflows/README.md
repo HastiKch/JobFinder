@@ -1,7 +1,42 @@
 # GitHub Workflows
 
 This directory contains the repository's CI workflow and production JobFinder
-pipeline workflow.
+pipeline workflow. Forks use these files to test changes and to run scheduled
+job searches without keeping a local machine online.
+
+## Prerequisites
+
+- GitHub Actions enabled for the repository.
+- Repository secrets configured before running `jobs.yml`.
+- Python 3.14 compatibility for code and tests.
+
+## Quick Start
+
+For CI, open a pull request or push to `main`; `.github/workflows/ci.yml` runs
+automatically.
+
+For the production job search:
+
+1. Add the secrets listed in [Required Secrets](#required-secrets).
+2. Open **Actions -> JobFinder Pipeline -> Run workflow**.
+3. Choose sources, posted-time window, applicant cap, run mode, and row policy.
+4. Read the created Google Sheet tab and the `jobfinder-run-reports` artifact.
+
+## Use This For Your Own Project
+
+When forking, review these workflow-specific settings:
+
+| Setting | Where |
+|---|---|
+| Schedule | `jobs.yml` `on.schedule` cron entries. |
+| Search defaults | `jobs.yml` `workflow_dispatch.inputs` and job `env`. |
+| Germany-specific provider defaults | `INDEED_COUNTRY`, `INDEED_LOCATION`, `STEPSTONE_LOCATION`, `XING_LOCATION`, and `configs/filters.json`. |
+| Generated CV filename applicant name | `JOB_EVAL_CV_PDF_APPLICANT_NAME` in `jobs.yml`. |
+| Required secrets | `Validate required secrets` step and this README. |
+| CI quality gates | `ci.yml` steps. |
+
+Keep private values in repository secrets. Do not commit generated private files
+that the workflow writes at runtime.
 
 ## `ci.yml`
 
@@ -104,3 +139,13 @@ Reports are generated only when the corresponding env var path is configured.
 - The workflow writes Google OAuth token JSON to a temporary runner file and
   applies restrictive file permissions before use.
 - Do not echo secret values while debugging.
+
+## Troubleshooting
+
+| Problem | What to check |
+|---|---|
+| CI cannot import `jobfinder` | Confirm `PYTHONPATH=src` is still present in smoke tests, or install the package before running module commands. |
+| Production workflow fails before scraping | Check the `Validate required secrets` step for the exact missing secret. |
+| Scheduled run did not create a tab | Check whether `daily-run-gate` skipped it because a scheduled run already succeeded that Berlin day. |
+| Workflow uses the wrong geography or applicant name | Update `jobs.yml` env values and `configs/filters.json` in the fork. |
+| Report artifact is missing | Confirm `JOBFINDER_*_REPORT_FILE` env vars still point under `reports/` and the upload step has not been removed. |

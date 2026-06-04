@@ -6,6 +6,29 @@ Back to the main project overview: [README.md](README.md)
 
 Prefer running from your own machine instead? See [README.local.md](README.local.md).
 
+## Table Of Contents
+
+- [Usability](#usability)
+- [Pros](#pros)
+- [Cons](#cons)
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Use This For Your Own Project](#use-this-for-your-own-project)
+- [How The Workflow Runs](#how-the-workflow-runs)
+- [1. Push The Repository To GitHub](#1-push-the-repository-to-github)
+- [2. Create Or Choose A Google Sheet](#2-create-or-choose-a-google-sheet)
+- [3. Create A Google OAuth Token](#3-create-a-google-oauth-token)
+- [4. Choose A Google Drive Folder](#4-choose-a-google-drive-folder)
+- [5. Prepare Private Content](#5-prepare-private-content)
+- [6. Add GitHub Repository Secrets](#6-add-github-repository-secrets)
+- [7. Run The Workflow Manually](#7-run-the-workflow-manually)
+- [8. Scheduled Runs](#8-scheduled-runs)
+- [9. Runtime Settings In GitHub Actions](#9-runtime-settings-in-github-actions)
+- [10. Read The Results](#10-read-the-results)
+- [11. Updating Configuration](#11-updating-configuration)
+- [Troubleshooting GitHub Actions](#troubleshooting-github-actions)
+- [Security Notes](#security-notes)
+
 ## Usability
 
 GitHub Actions is the recommended production workflow. After setup, you can run
@@ -39,6 +62,45 @@ runs, central logs, and private values stored as GitHub repository secrets.
   and uploaded CV PDFs.
 - A Google Drive folder ID for generated CV PDF uploads.
 - Private keyword, prompt, and CV content ready to paste into repository secrets.
+
+## Quick Start
+
+For a new fork, the shortest path is:
+
+1. Fork the repository.
+2. Add the required repository secrets.
+3. Run **Actions -> JobFinder Pipeline -> Run workflow**.
+4. Open the Google Sheet named by `GOOGLE_SPREADSHEET_ID`.
+
+If you already created the private local files and have the GitHub CLI
+authenticated, these commands set the text secrets:
+
+```bash
+gh secret set JOB_KEYWORDS_TEXT < configs/keywords.txt
+gh secret set MASTER_PROMPT_TEXT < prompts/master_prompt.txt
+gh secret set MASTER_CV_TEX < cv/master_cv.tex
+gh secret set GOOGLE_TOKEN_JSON < google_token.json
+```
+
+Set API keys and IDs with the GitHub UI or with `gh secret set SECRET_NAME`
+followed by pasting the value.
+
+## Use This For Your Own Project
+
+Forkers should review these values before the first scheduled run:
+
+| What to change | Where |
+|---|---|
+| API keys and private content | GitHub repository secrets listed below. |
+| Target Sheet and Drive folder | `GOOGLE_SPREADSHEET_ID` and `JOB_EVAL_CV_DRIVE_FOLDER_ID` secrets. |
+| Search geography | `configs/filters.json` and the `INDEED_*`, `STEPSTONE_*`, and `XING_*` env values in `.github/workflows/jobs.yml`. |
+| Workflow schedule | The `schedule` block in `.github/workflows/jobs.yml`. |
+| Applicant name in generated PDF filenames | `JOB_EVAL_CV_PDF_APPLICANT_NAME` in `.github/workflows/jobs.yml`. The current repository value is owner-specific. |
+| Default manual-run choices | `workflow_dispatch.inputs` defaults in `.github/workflows/jobs.yml`. |
+| Final row cleanup | Manual input `unsuitable_rows`, or `JOB_EVAL_UNSUITABLE_ROW_POLICY` in the workflow env. |
+
+Use GitHub secrets for anything private. Keep committed files limited to public
+examples, shared non-secret filters, workflow definitions, and code.
 
 ## How The Workflow Runs
 
@@ -319,7 +381,7 @@ JOB_EVAL_CONCURRENCY: "8"
 JOB_EVAL_BATCH_SIZE: "40"
 JOB_EVAL_CV_PDF_OUTPUT: "true"
 JOB_EVAL_CV_PHOTO_FILE: cv/photo.jpg
-JOB_EVAL_CV_PDF_APPLICANT_NAME: "Applicant"
+JOB_EVAL_CV_PDF_APPLICANT_NAME: "Amir Donyadide"
 JOB_EVAL_CV_PDF_TIMEOUT: "120"
 JOB_EVAL_LARGE_QUEUE_THRESHOLD: "200"
 JOB_EVAL_LARGE_QUEUE_SLEEP_MS: "2000"

@@ -11,6 +11,30 @@ The project is intentionally operational: it can run locally for development and
 debugging, or on GitHub Actions for scheduled production runs that write directly
 to Google Sheets.
 
+## Table Of Contents
+
+- [Executive Overview](#executive-overview)
+- [Use This For Your Own Project](#use-this-for-your-own-project)
+- [Architecture](#architecture)
+- [Execution Flow](#execution-flow)
+- [Installation](#installation)
+- [Private Setup](#private-setup)
+- [Quick Start](#quick-start)
+- [CLI Usage](#cli-usage)
+- [Configuration Reference](#configuration-reference)
+- [Config Files](#config-files)
+- [Google Sheets Output](#google-sheets-output)
+- [GitHub Actions](#github-actions)
+- [Folder Structure](#folder-structure)
+- [Development Workflow](#development-workflow)
+- [Testing Strategy](#testing-strategy)
+- [Troubleshooting](#troubleshooting)
+- [Operational Notes](#operational-notes)
+- [Cost Optimization](#cost-optimization)
+- [Security](#security)
+- [Maintainership Roadmap](#maintainership-roadmap)
+- [More Documentation](#more-documentation)
+
 ## Executive Overview
 
 JobFinder exists to reduce repeated manual job-search work while keeping the
@@ -48,6 +72,45 @@ Key capabilities:
 - Incremental evaluator saves for crash recovery.
 - Runtime reports for CI artifacts.
 - Excel output for local-only runs.
+
+## Use This For Your Own Project
+
+JobFinder is designed to be forked. A fork should keep the public code and
+examples, then replace the private search inputs and deployment settings with
+values for the new user or team.
+
+Before running a fork, change or create:
+
+| Area | What to change |
+|---|---|
+| Private keywords | Create `configs/keywords.txt` locally, or save the same text in the GitHub secret `JOB_KEYWORDS_TEXT`. |
+| Private evaluator prompt | Create `prompts/master_prompt.txt`, or save it in `MASTER_PROMPT_TEXT` for GitHub Actions. |
+| Private CV | Create `cv/master_cv.tex`, or save it in `MASTER_CV_TEX` for GitHub Actions. |
+| Optional CV photo | Use `cv/photo.jpg`, another path set by `JOB_EVAL_CV_PHOTO_FILE`, or `CV_PHOTO_BASE64` in GitHub Actions. The tracked `cv/photo.png` is only an example/public asset. |
+| Search geography and filters | Edit `configs/filters.json` for LinkedIn location/geo ID, Stepstone/Xing defaults, title exclusions, company exclusions, applicant cap, and spreadsheet status values. |
+| Runtime secrets | Set `APIFY_API_TOKEN`, `OPENAI_API_KEY` when evaluating, `GOOGLE_SPREADSHEET_ID`, and `JOB_EVAL_CV_DRIVE_FOLDER_ID`. |
+| Google account | Create a local OAuth token with `python -m jobfinder.google_auth`; in GitHub Actions, paste that authorized-user JSON into `GOOGLE_TOKEN_JSON`. |
+| GitHub Actions defaults | Edit `.github/workflows/jobs.yml` for the schedule, default geography, concurrency, applicant cap, and `JOB_EVAL_CV_PDF_APPLICANT_NAME`. |
+
+Do not commit real `.env`, Google tokens, keywords, prompts, CV files, generated
+workbooks, or local spreadsheet IDs. The `.gitignore` already protects the
+standard private paths; keep it that way in forks.
+
+Recommended first fork run:
+
+```bash
+cp .env.example .env
+cp configs/keywords.example.txt configs/keywords.txt
+cp prompts/master_prompt.example.txt prompts/master_prompt.txt
+cp cv/master_cv.example.tex cv/master_cv.tex
+python -m pip install -e .
+python run_job_pipeline.py --mode scrape_only --preflight
+```
+
+Then choose one of the runbooks:
+
+- Local development or a one-off Excel export: [README.local.md](README.local.md)
+- Scheduled online runs from a fork: [README.github-actions.md](README.github-actions.md)
 
 ## Architecture
 

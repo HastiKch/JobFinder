@@ -9,6 +9,31 @@ The public entry point is:
 from jobfinder.dedupe import deduplicate_search_results
 ```
 
+## Prerequisites
+
+- Python 3.14 or newer.
+- No external services or API keys. Dedupe is pure local logic.
+
+## Quick Start
+
+```bash
+python -m pytest tests/test_dedupe_matching.py tests/test_scraper_normalize.py
+```
+
+Minimal usage:
+
+```python
+from jobfinder.dedupe import deduplicate_search_results
+
+result = deduplicate_search_results(
+    [
+        ("GIS analyst", [{"title": "GIS Analyst", "companyName": "Acme"}]),
+        ("geospatial", [{"title": "GIS Analyst", "companyName": "Acme"}]),
+    ]
+)
+print(result.output_count)
+```
+
 ## Why This Exists
 
 The same real-world job can appear:
@@ -113,3 +138,26 @@ python -m pytest tests/test_dedupe_matching.py tests/test_scraper_normalize.py
 ```
 
 Update tests whenever identity fields, thresholds, or merge precedence change.
+
+## Use This For Your Own Project
+
+Most forks should tune keywords and final filters before changing dedupe logic.
+Change the matcher only when the same real-world job is repeatedly merged or
+split incorrectly for your providers or geography.
+
+When changing matching behavior, update:
+
+- `normalize.py` for field cleanup and blocking keys.
+- `scoring.py` for similarity and conflict checks.
+- `matching.py` for thresholds and match stages.
+- `merge.py` for canonical row precedence.
+- `tests/test_dedupe_matching.py` for examples of the intended behavior.
+
+## Troubleshooting
+
+| Problem | What to check |
+|---|---|
+| Real duplicates are not merging | Inspect normalized company, title, location, job type, posted time, and external apply URL. |
+| Different jobs are merging | Check seniority, role-family, job-type, and posted-time blockers. |
+| Provider URLs look identical but rows stay separate | This is intentional; provider job URLs are provenance, not cross-provider identity. |
+| A threshold change affects many rows | Run focused tests and review a scrape-only output before enabling evaluation. |

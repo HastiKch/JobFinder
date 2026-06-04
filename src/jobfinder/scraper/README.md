@@ -15,6 +15,67 @@ or, after editable install:
 jobfinder-scrape
 ```
 
+## Table Of Contents
+
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Use This For Your Own Project](#use-this-for-your-own-project)
+- [Modules](#modules)
+- [Execution Flow](#execution-flow)
+- [Output Modes](#output-modes)
+- [Source Selection](#source-selection)
+- [Concurrency And Retries](#concurrency-and-retries)
+- [Historical Windows](#historical-windows)
+- [Export Contract](#export-contract)
+- [Extension Points](#extension-points)
+- [Important Constraints](#important-constraints)
+- [Troubleshooting](#troubleshooting)
+
+## Prerequisites
+
+- Python 3.14 or newer.
+- Runtime dependencies installed.
+- `APIFY_API_TOKEN`.
+- `configs/keywords.txt` and `configs/filters.json`.
+- Google OAuth and `GOOGLE_SPREADSHEET_ID` only when output includes Google
+  Sheets.
+
+## Quick Start
+
+Scrape LinkedIn to local Excel:
+
+```bash
+JOBFINDER_SCRAPER_OUTPUT_MODE=excel JOBFINDER_SCRAPER_SOURCES=linkedin python linkedin_job_scraper.py
+```
+
+Scrape all providers to Google Sheets:
+
+```bash
+JOBFINDER_SCRAPER_OUTPUT_MODE=google_sheets JOBFINDER_SCRAPER_SOURCES=all python linkedin_job_scraper.py
+```
+
+Debug one direct-URL provider:
+
+```bash
+JOBFINDER_SCRAPER_OUTPUT_MODE=excel JOBFINDER_SCRAPER_SOURCES=stepstone STEPSTONE_START_URLS="https://www.stepstone.de/jobs/software" python linkedin_job_scraper.py
+```
+
+## Use This For Your Own Project
+
+Forks usually customize scraper behavior through settings:
+
+| Need | Change |
+|---|---|
+| Source mix | `JOBFINDER_SCRAPER_SOURCES`. |
+| Private search terms | `configs/keywords.txt` locally or `JOB_KEYWORDS_TEXT` in GitHub Actions. |
+| Geography and provider defaults | `configs/filters.json`, `INDEED_*`, `STEPSTONE_*`, and `XING_*`. |
+| Cost and speed | `*_MAX_RESULTS_PER_SEARCH`, `JOBFINDER_SCRAPER_SEARCH_CONCURRENCY`, and provider concurrency caps. |
+| Historical window behavior | `JOBFINDER_SCRAPER_POSTED_TIME_WINDOW` and `JOBFINDER_SCRAPER_SEARCH_WINDOW_BUFFER_SECONDS`. |
+| Final filters | `configs/filters.json` `final_filters` and `JOBFINDER_SCRAPER_MAX_APPLICANTS`. |
+
+Use `JOBFINDER_SCRAPER_OUTPUT_MODE=excel` for cheap local debugging before
+enabling Google Sheets and evaluation.
+
 ## Modules
 
 | Module | Responsibility |
@@ -148,3 +209,14 @@ Excel export:
 - Keep source failure behavior deliberate. Stepstone and Xing failures are
   currently source-isolated; LinkedIn and Indeed search execution failures are
   fatal.
+
+## Troubleshooting
+
+| Problem | What to check |
+|---|---|
+| `Missing required setting: APIFY_API_TOKEN` | Set `APIFY_API_TOKEN` in `.env`, the shell, or a GitHub secret. |
+| No searches are configured | Create `configs/keywords.txt` with at least one keyword; settings load requires it even when Stepstone or Xing direct URL mode is configured. |
+| No jobs found | Check keywords, source selection, geography, posted-time window, and final filters. |
+| Apify timeouts or 5xx errors | Lower concurrency or max results, increase timeout, or retry later. |
+| Google Sheets export fails | Confirm OAuth token scopes, spreadsheet ID, and account access. |
+| A provider failure stops everything | LinkedIn and Indeed failures are fatal; Stepstone and Xing failures are source-isolated by design. |

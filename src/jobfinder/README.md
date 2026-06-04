@@ -11,6 +11,60 @@ compatibility scripts:
 New code should import from `jobfinder.*`. The root scripts exist to preserve
 older local commands and to make the package usable before an editable install.
 
+## Table Of Contents
+
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+- [Use This For Your Own Project](#use-this-for-your-own-project)
+- [Package Map](#package-map)
+- [Runtime Entry Points](#runtime-entry-points)
+- [Architecture Boundaries](#architecture-boundaries)
+- [Data Flow](#data-flow)
+- [Design Constraints](#design-constraints)
+- [Extension Points](#extension-points)
+- [Troubleshooting](#troubleshooting)
+
+## Prerequisites
+
+- Python 3.14 or newer.
+- Runtime dependencies installed with `python -m pip install -e .` or
+  `python -m pip install -r requirements.txt`.
+- Private files and credentials only for commands that actually scrape,
+  evaluate, or touch Google APIs.
+
+## Quick Start
+
+From the repository root:
+
+```bash
+python -m pip install -e .
+jobfinder-pipeline --help
+jobfinder-scrape --help
+jobfinder-evaluate --help
+```
+
+Without installing the package, use the root wrappers or set `PYTHONPATH`:
+
+```bash
+python run_job_pipeline.py --help
+env PYTHONPATH=src python -m jobfinder.pipeline.cli --help
+```
+
+## Use This For Your Own Project
+
+Forks should usually change configuration and private inputs before package
+code:
+
+| Need | Start with |
+|---|---|
+| Search terms | `configs/keywords.txt` or `JOB_KEYWORDS_TEXT`. |
+| Search geography and filters | `configs/filters.json` plus provider env vars. |
+| Runtime mode, secrets, and tuning | `.env` locally or `.github/workflows/jobs.yml` in Actions. |
+| Prompt and CV behavior | `prompts/master_prompt.txt`, `cv/master_cv.tex`, and evaluator settings. |
+| New provider or output columns | Package modules listed in [Extension Points](#extension-points). |
+
+Keep compatibility wrappers thin. New behavior belongs under `src/jobfinder`.
+
 ## Package Map
 
 | Path | Responsibility |
@@ -99,3 +153,12 @@ Common changes and where they belong:
 | Tune dedupe identity | `dedupe/normalize.py`, `dedupe/scoring.py`, `dedupe/matching.py`, `tests/test_dedupe_matching.py`. |
 | Change evaluator output parsing | `evaluator/parsing.py`, `evaluator/models.py`, evaluator tests. |
 | Change production scheduling | `.github/workflows/jobs.yml` and `.github/workflows/README.md`. |
+
+## Troubleshooting
+
+| Problem | What to check |
+|---|---|
+| `No module named 'jobfinder'` | Run from the repository root, install with `python -m pip install -e .`, or set `PYTHONPATH=src`. |
+| Console script is missing | Reinstall the editable package after changing `pyproject.toml`. |
+| A compatibility import behaves differently | Compare the facade module with the stable `jobfinder.*` implementation it re-exports. |
+| A column change breaks evaluator output | Update `spreadsheet/schema.py`, exporter/evaluator code, tests, and READMEs together. |

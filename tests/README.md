@@ -3,6 +3,23 @@
 The test suite verifies JobFinder behavior without making real Apify, Google, or
 OpenAI network calls.
 
+Use these tests when you change a fork's providers, config loading, spreadsheet
+columns, evaluation behavior, or workflow defaults and want confidence before
+running paid external services.
+
+## Prerequisites
+
+- Python 3.14 or newer.
+- Development dependencies from `requirements-dev.txt`.
+- No real API keys are required.
+
+## Quick Start
+
+```bash
+python -m pip install -r requirements-dev.txt
+python -m pytest
+```
+
 Run all tests:
 
 ```bash
@@ -55,6 +72,19 @@ Tests use:
 
 If a new test needs network access, prefer adding a fake adapter seam instead.
 
+## Use This For Your Own Project
+
+Forks should keep the suite network-free and update tests alongside any
+user-facing behavior change.
+
+| Fork change | Update or run |
+|---|---|
+| New provider or actor payload | Provider-specific test plus `test_scraper_search.py`. |
+| New spreadsheet column | `test_scraper_export_rows.py`, `test_evaluator_parsing.py`, and `test_evaluator_storage.py`. |
+| New config key or default | `test_config_files.py`, `test_scraper_settings.py`, and related docs. |
+| New workflow secret or mode | `test_pipeline_cli.py` and `.github/workflows/README.md`. |
+| New evaluator output format | `test_evaluator_parsing.py` and `test_evaluator_openai_client.py`. |
+
 ## Focused Test Guidance
 
 | Change area | Suggested tests |
@@ -73,3 +103,12 @@ If a new test needs network access, prefer adding a fake adapter seam instead.
 - When changing column names, update scraper, evaluator, and schema tests
   together.
 - When changing defaults, update `.env.example`, docs, and tests together.
+
+## Troubleshooting
+
+| Problem | What to check |
+|---|---|
+| `No module named 'jobfinder'` | Run tests from the repository root, or install with `python -m pip install -e .`. |
+| Ruff, mypy, or pytest is missing | Install `requirements-dev.txt`. |
+| Tests unexpectedly hit real services | Replace the network call with a fake or monkeypatch; tests should not require Apify, Google, or OpenAI credentials. |
+| Config tests fail after editing filters | Validate `configs/filters.json` with `python -m json.tool configs/filters.json`. |

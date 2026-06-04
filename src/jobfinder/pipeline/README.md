@@ -15,6 +15,30 @@ or, after editable install:
 jobfinder-pipeline
 ```
 
+## Prerequisites
+
+- Python 3.14 or newer.
+- Dependencies installed with `python -m pip install -e .` or
+  `python -m pip install -r requirements.txt`.
+- `APIFY_API_TOKEN` for all pipeline modes.
+- Google Sheets OAuth and spreadsheet access, because the pipeline forces
+  Google Sheets output.
+- `OPENAI_API_KEY`, prompt/CV files, LaTeX tooling, and Drive folder ID when
+  using `scrape_and_evaluate` with PDF output.
+
+## Quick Start
+
+```bash
+python run_job_pipeline.py --mode scrape_only --preflight
+python run_job_pipeline.py --mode scrape_only
+```
+
+Full scrape plus evaluation:
+
+```bash
+python run_job_pipeline.py --mode scrape_and_evaluate
+```
+
 ## Files
 
 | File | Responsibility |
@@ -56,7 +80,8 @@ Child commands are run with:
 - `PYTHONPATH` containing the local `src` directory.
 - Local `.env` values merged into the child environment without overriding real
   environment variables.
-- `JOBSCRAPER_OUTPUT_MODE=google_sheets`.
+- `JOBFINDER_SCRAPER_OUTPUT_MODE=google_sheets` and legacy
+  `JOBSCRAPER_OUTPUT_MODE=google_sheets`.
 - `JOBFINDER_PIPELINE_MODE` set to the resolved mode.
 
 ## Preflight
@@ -105,3 +130,27 @@ always start with scraping.
   day.
 - `validate_python_dependencies()` currently only checks the OpenAI package for
   evaluation mode; runtime imports still validate other dependencies when used.
+
+## Use This For Your Own Project
+
+Forks should change pipeline behavior through environment variables and workflow
+inputs before changing `pipeline/cli.py`:
+
+| Need | Change |
+|---|---|
+| Scrape without evaluation | `--mode scrape_only` or `JOBFINDER_PIPELINE_MODE=scrape_only`. |
+| Resume or force fresh same-day runs | `JOBFINDER_PIPELINE_RESUME_INCOMPLETE`. |
+| Child process timeout | `JOBFINDER_PIPELINE_STEP_TIMEOUT_SECONDS`. |
+| Search sources and filters | Scraper env vars and `configs/filters.json`. |
+| Evaluation model, concurrency, and cleanup policy | `JOB_EVAL_*` env vars. |
+
+Use the scraper CLI directly when a fork only needs local Excel output.
+
+## Troubleshooting
+
+| Problem | What to check |
+|---|---|
+| Pipeline writes Google Sheets even though `.env` says Excel | This is intentional; the pipeline forces Google Sheets so the evaluator can read the new tab. |
+| `Missing required setting(s): OPENAI_API_KEY` | Use `--mode scrape_only` or configure the OpenAI key. |
+| Same-day rerun skips scraping | An incomplete timestamped tab exists and resume is enabled. Set `JOBFINDER_PIPELINE_RESUME_INCOMPLETE=false` to force scraping. |
+| Preflight fails on Drive folder | Set `JOB_EVAL_CV_DRIVE_FOLDER_ID`, or set `JOB_EVAL_CV_PDF_OUTPUT=false` if PDF output is not needed. |
