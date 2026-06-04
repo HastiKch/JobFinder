@@ -270,6 +270,11 @@ event can be dropped. The workflow uses a guard job so fallback runs skip the
 expensive pipeline when a scheduled run has already succeeded for the current
 `Europe/Berlin` day. Manual runs always bypass that guard.
 
+If an earlier same-day run scraped jobs but failed during evaluation, the next
+fallback run resumes that existing dated tab and runs only the evaluator. This
+prevents repeated Apify scraping after errors such as OpenAI quota or billing
+failures.
+
 To change the schedule, edit the `cron` value in `.github/workflows/jobs.yml`,
 commit the change, and push it to GitHub.
 
@@ -288,6 +293,7 @@ The current workflow sets these runtime values in `.github/workflows/jobs.yml`:
 JOBFINDER_SCRAPER_OUTPUT_MODE: "google_sheets"
 JOBFINDER_SCRAPER_SOURCES: ${{ github.event.inputs.sources || 'all' }}
 JOBFINDER_PIPELINE_MODE: ${{ github.event.inputs.run_mode || 'scrape_and_evaluate' }}
+JOBFINDER_PIPELINE_RESUME_INCOMPLETE: "true"
 JOBFINDER_SCRAPER_POSTED_TIME_WINDOW: ${{ github.event.inputs.posted_time_window || 'since_previous_run' }}
 JOBFINDER_SCRAPER_MAX_APPLICANTS: ${{ github.event.inputs.max_applicants == 'no_limit' && '0' || github.event.inputs.max_applicants || '50' }}
 JOBFINDER_SCRAPER_SEARCH_CONCURRENCY: "15"
@@ -333,6 +339,10 @@ The evaluator allows up to 8 OpenAI requests at the same time, with jobs grouped
 locally in batches of 40. When more than 200 rows are queued, the evaluator
 spaces OpenAI request starts by 2000 ms. Each row is saved back to the same
 sheet immediately after it is evaluated, so a later failure keeps completed rows.
+When a later scheduled fallback sees incomplete rows in a timestamped tab from
+the same `Europe/Berlin` day, it evaluates that exact tab and does not scrape
+again. Set `JOBFINDER_PIPELINE_RESUME_INCOMPLETE=false` only when you want to
+force a fresh scrape.
 
 If you see OpenAI rate-limit or retry warnings, reduce these values in
 `.github/workflows/jobs.yml`:
@@ -345,6 +355,8 @@ JOB_EVAL_BATCH_SIZE: "20"
 ## 10. Read The Results
 
 - The Google Sheet receives a new dated tab for each run.
+- Same-day fallback runs resume an incomplete dated tab instead of scraping a
+  duplicate tab.
 - `scrape_only` stops after writing scraped rows.
 - `scrape_and_evaluate` writes final AI values back to the same tab.
 - By default, the final tab keeps only one-label `Not Suitable` rows.

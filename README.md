@@ -31,7 +31,8 @@ The core workflow is:
 9. Export a timestamped worksheet to Excel, Google Sheets, or both.
 10. Optionally evaluate unevaluated rows with OpenAI, compile suitable tailored
     LaTeX CVs into PDFs, upload them to Google Drive, and write final AI columns
-    back to the same sheet.
+    back to the same sheet. Same-day retries resume an incomplete evaluated tab
+    instead of scraping again.
 11. Remove job-description/detail columns and, by default, remove `Not Suitable`
     rows that have more than one unsuitable-reason label.
 
@@ -421,7 +422,7 @@ Supported options:
 | Option | Description |
 |---|---|
 | `--mode scrape_only` | Scrape jobs to Google Sheets and stop. |
-| `--mode scrape_and_evaluate` | Scrape jobs to Google Sheets, then evaluate the latest tab. |
+| `--mode scrape_and_evaluate` | Resume an incomplete same-day tab when present; otherwise scrape jobs to Google Sheets, then evaluate the latest tab. |
 | `--preflight` | Validate settings, dependencies, Google Sheets access, and evaluator inputs without running the pipeline. |
 
 Examples:
@@ -489,6 +490,7 @@ Environment variables override values from `.env`.
 | `JOBFINDER_SCRAPER_OUTPUT_MODE` | `excel` | `excel`, `google_sheets`, or `both`. Full pipeline forces `google_sheets`. |
 | `JOBFINDER_SCRAPER_SOURCES` | `linkedin` | `linkedin`, `indeed`, `stepstone`, `xing`, `all`, or comma-separated source names. |
 | `JOBFINDER_PIPELINE_MODE` | `scrape_and_evaluate` | Used by the pipeline when `--mode` is omitted. |
+| `JOBFINDER_PIPELINE_RESUME_INCOMPLETE` | `true` | In full pipeline mode, skip scraping and resume evaluation when today's Google Sheet tab still has queued evaluator rows. |
 | `JOBFINDER_SCRAPER_TIMEZONE` | `Europe/Berlin` | Timezone for logs and timestamped worksheet names. |
 | `JOBFINDER_SCRAPER_POSTED_TIMEZONE` | `Europe/Berlin` | Timezone used for the `Posted` spreadsheet column and exact posted-window filtering. |
 

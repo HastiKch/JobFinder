@@ -14,6 +14,7 @@ from jobfinder.env import EnvSettings, load_local_env
 from jobfinder.operations.reports import write_report_from_env
 from jobfinder.paths import ENV_FILE, PROJECT_ROOT
 from jobfinder.pipeline.preflight import run_preflight
+from jobfinder.pipeline.resume import find_incomplete_evaluation_sheet
 from jobfinder.scraper.settings import parse_apify_api_tokens
 
 LOGGER = logging.getLogger("jobfinder.pipeline")
@@ -22,6 +23,7 @@ PIPELINE_MODE_SCRAPE_ONLY = "scrape_only"
 PIPELINE_MODE_SCRAPE_AND_EVALUATE = "scrape_and_evaluate"
 DEFAULT_PIPELINE_MODE = PIPELINE_MODE_SCRAPE_AND_EVALUATE
 DEFAULT_STEP_TIMEOUT_SECONDS = 6 * 60 * 60
+RESUME_INCOMPLETE_ENV = "JOBFINDER_PIPELINE_RESUME_INCOMPLETE"
 PIPELINE_MODE_ALIASES = {
     "scrape": PIPELINE_MODE_SCRAPE_ONLY,
     "scrape_only": PIPELINE_MODE_SCRAPE_ONLY,
@@ -116,6 +118,11 @@ def parse_step_timeout_seconds(local_env: dict[str, str]) -> int | None:
             "of seconds."
         ) from exc
     return seconds if seconds > 0 else None
+
+
+def resume_incomplete_evaluation_enabled(local_env: dict[str, str]) -> bool:
+    """Return true when full pipeline runs may skip scraping to finish evaluation."""
+    return EnvSettings(local_env, logger=LOGGER).get_bool(RESUME_INCOMPLETE_ENV, True)
 
 
 def run_step(
@@ -228,15 +235,54 @@ def main() -> int:
     env["JOBFINDER_PIPELINE_MODE"] = pipeline_mode
 
     scrape_command = [sys.executable, "-m", "jobfinder.scraper.cli"]
-    evaluate_command = [
-        sys.executable,
-        "-m",
-        "jobfinder.evaluator.cli",
-        "--source",
-        "google_sheets",
-        "--sheet",
-        "latest",
-    ]
+
+    def evaluate_command(sheet_name: str) -> list[str]:
+        return [
+            sys.executable,
+            "-m",
+            "jobfinder.evaluator.cli",
+            "--source",
+            "google_sheets",
+            "--sheet",
+            sheet_name,
+        ]
+
+    default_evaluate_command = evaluate_command("latest")
+
+    if pipeline_mode == PIPELINE_MODE_SCRAPE_AND_EVALUATE and (
+        resume_incomplete_evaluation_enabled(local_env)
+    ):
+        try:
+            resume_sheet = find_incomplete_evaluation_sheet(
+                EnvSettings(local_env, logger=LOGGER)
+            )
+        except Exception as exc:
+            LOGGER.warning(
+                "Could not inspect same-day Google Sheet tabs for incomplete "
+                "evaluation; starting from scraping. Details: %s",
+                exc,
+            )
+        else:
+            if resume_sheet is not None:
+                LOGGER.info(
+                    "Found incomplete evaluation on today's Google Sheet tab %s "
+                    "(%s queued row(s), %s already evaluated). Skipping scraping "
+                    "and resuming evaluation.",
+                    resume_sheet.sheet_name,
+                    resume_sheet.queued_count,
+                    resume_sheet.skipped_existing_count,
+                )
+                run_step(
+                    evaluate_command(resume_sheet.sheet_name),
+                    env,
+                    "Step 2/2: Resuming incomplete evaluation with OpenAI",
+                    timeout_seconds=step_timeout_seconds,
+                )
+                LOGGER.info(
+                    "Pipeline resume complete. The existing Google Sheet tab now "
+                    "includes the AI evaluation columns."
+                )
+                return 0
 
     if pipeline_mode == PIPELINE_MODE_SCRAPE_ONLY:
         run_step(
@@ -255,7 +301,7 @@ def main() -> int:
         timeout_seconds=step_timeout_seconds,
     )
     run_step(
-        evaluate_command,
+        default_evaluate_command,
         env,
         "Step 2/2: Evaluating jobs with OpenAI",
         timeout_seconds=step_timeout_seconds,

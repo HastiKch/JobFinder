@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import sys
 
 import pytest
 
+import jobfinder.pipeline.cli as pipeline_cli
 from jobfinder.pipeline.cli import (
     PIPELINE_MODE_SCRAPE_AND_EVALUATE,
     PIPELINE_MODE_SCRAPE_ONLY,
@@ -14,6 +16,7 @@ from jobfinder.pipeline.cli import (
     resolve_pipeline_mode,
     validate_required_settings,
 )
+from jobfinder.pipeline.resume import IncompleteEvaluationSheet
 
 
 def test_parse_pipeline_mode_accepts_user_facing_aliases():
@@ -94,3 +97,54 @@ def test_scrape_and_evaluate_requires_openai_key(monkeypatch):
         )
 
     assert "OPENAI_API_KEY" in str(excinfo.value)
+
+
+def test_main_resumes_incomplete_evaluation_without_scraping(monkeypatch):
+    """GitHub Actions fallback runs should retry evaluation on the existing tab."""
+    calls = []
+
+    def fake_run_step(command, env, label, *, timeout_seconds):
+        calls.append((command, label, timeout_seconds))
+
+    monkeypatch.setattr(sys, "argv", ["run_job_pipeline.py"])
+    monkeypatch.setattr(pipeline_cli, "configure_cli_logging", lambda: None)
+    monkeypatch.setattr(
+        pipeline_cli,
+        "load_local_env",
+        lambda: {
+            "APIFY_API_TOKEN": "apify_api_real_token",
+            "OPENAI_API_KEY": "sk-test",
+            "GOOGLE_SPREADSHEET_ID": "spreadsheet-id",
+        },
+    )
+    monkeypatch.setattr(pipeline_cli, "validate_python_dependencies", lambda mode: None)
+    monkeypatch.setattr(pipeline_cli, "run_step", fake_run_step)
+    monkeypatch.setattr(
+        pipeline_cli,
+        "find_incomplete_evaluation_sheet",
+        lambda env: IncompleteEvaluationSheet(
+            spreadsheet_id="spreadsheet-id",
+            sheet_name="2026-06-04 07-17-00",
+            queued_count=3,
+            skipped_existing_count=10,
+        ),
+    )
+
+    status = pipeline_cli.main()
+
+    assert status == 0
+    assert calls == [
+        (
+            [
+                sys.executable,
+                "-m",
+                "jobfinder.evaluator.cli",
+                "--source",
+                "google_sheets",
+                "--sheet",
+                "2026-06-04 07-17-00",
+            ],
+            "Step 2/2: Resuming incomplete evaluation with OpenAI",
+            21600,
+        )
+    ]

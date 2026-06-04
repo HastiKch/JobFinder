@@ -322,6 +322,9 @@ python job_fit_evaluator.py --source excel --sheet latest
 - `python linkedin_job_scraper.py` writes `jobs.xlsx` when `JOBFINDER_SCRAPER_OUTPUT_MODE=excel`.
 - Google Sheets runs create a new dated tab in the configured spreadsheet.
 - `python run_job_pipeline.py` evaluates the latest new Google Sheet tab in place.
+- If a same-day Google Sheets pipeline run already scraped a dated tab but
+  evaluation failed, the next `scrape_and_evaluate` run resumes evaluation on
+  that tab instead of scraping again.
 - Completed evaluations are saved as rows finish, so a later failure keeps already completed rows.
 - By default, final cleanup keeps only one-label `Not Suitable` rows. Set `JOB_EVAL_UNSUITABLE_ROW_POLICY=keep_all` to preserve all evaluated rows.
 - After evaluation with PDF output enabled, the final AI columns are `AI Verdict`, `AI Fit Score` (0-26), `AI Unsuitable Reasons`, and `AI CV PDF`; the temporary `AI Tailored CV` column is removed during final cleanup.

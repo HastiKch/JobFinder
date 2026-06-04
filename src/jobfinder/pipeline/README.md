@@ -19,15 +19,16 @@ jobfinder-pipeline
 
 | File | Responsibility |
 |---|---|
-| `cli.py` | Pipeline mode parsing, required setting validation, child process execution, and report writing. |
+| `cli.py` | Pipeline mode parsing, required setting validation, same-day resume checks, child process execution, and report writing. |
 | `preflight.py` | Configuration, Google Sheets, prompt/CV, and OpenAI key readiness checks. |
+| `resume.py` | Detect same-day Google Sheet tabs whose scraping finished but evaluation is incomplete. |
 
 ## Modes
 
 | Mode | Behavior |
 |---|---|
 | `scrape_only` | Run scraper only. The pipeline still forces Google Sheets output. |
-| `scrape_and_evaluate` | Run scraper, then run evaluator against `--source google_sheets --sheet latest`. |
+| `scrape_and_evaluate` | Resume an incomplete same-day Google Sheet tab when present; otherwise run scraper, then run evaluator against `--source google_sheets --sheet latest`. |
 
 Aliases such as `scrape`, `scraper_only`, `full`, and `both` are accepted and
 resolved in `parse_pipeline_mode()`.
@@ -41,10 +42,12 @@ flowchart TD
     C --> D["validate APIFY_API_TOKEN<br/>and OPENAI_API_KEY when needed"]
     D --> E{"--preflight?"}
     E -- yes --> F["run_preflight()"]
-    E -- no --> G["python -m jobfinder.scraper.cli"]
-    G --> H{"scrape_only?"}
-    H -- yes --> I["done"]
-    H -- no --> J["python -m jobfinder.evaluator.cli<br/>--source google_sheets --sheet latest"]
+    E -- no --> G{"same-day incomplete tab?"}
+    G -- yes --> H["python -m jobfinder.evaluator.cli<br/>--source google_sheets --sheet exact-tab"]
+    G -- no --> I["python -m jobfinder.scraper.cli"]
+    I --> J{"scrape_only?"}
+    J -- yes --> K["done"]
+    J -- no --> L["python -m jobfinder.evaluator.cli<br/>--source google_sheets --sheet latest"]
 ```
 
 Child commands are run with:
@@ -82,11 +85,23 @@ When these env vars are set, the pipeline writes sanitized JSON reports:
 GitHub Actions sets these to paths under `reports/` and uploads them as
 artifacts.
 
+## Resume Behavior
+
+In `scrape_and_evaluate` mode, the pipeline checks the configured Google
+spreadsheet before scraping. If it finds a timestamped run tab from the current
+local day with rows still queued by the evaluator, it skips scraping and runs
+the evaluator against that exact tab. This lets scheduled GitHub Actions
+fallback runs finish the failed step after errors such as OpenAI quota or
+billing failures instead of creating another scraped tab.
+
+Set `JOBFINDER_PIPELINE_RESUME_INCOMPLETE=false` to force the older behavior and
+always start with scraping.
+
 ## Constraints
 
 - The pipeline is Google Sheets oriented. Use `linkedin_job_scraper.py` directly
   for local Excel-only scraping.
-- The evaluator always targets the latest Google Sheets tab created by the
-  scraper step.
+- Resume detection only considers timestamped run tabs from the current local
+  day.
 - `validate_python_dependencies()` currently only checks the OpenAI package for
   evaluation mode; runtime imports still validate other dependencies when used.
